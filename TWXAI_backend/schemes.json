@@ -1,0 +1,476 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "description": "Knowledge base of Indian Government financial inclusion schemes for loan applicants",
+    "last_updated": "2025-09-25",
+    "sources": [
+      "https://www.standupmitra.in/Home/SchemeGuidelines",
+      "https://nulm.gov.in/PDF/NULM_Mission/NULM_mission_document.pdf",
+      "https://pmay-urban.gov.in/uploads/guidelines/Operational-Guidelines-of-PMAY-U-2.pdf",
+      "https://pmaymis.gov.in/PDF/CLSS_Guidelines.pdf",
+      "https://www.education.gov.in/sites/upload_files/mhrd/files/document-reports/PM_Vidyalaxmi_Scheme_Guidelines.pdf",
+      "https://www.myscheme.gov.in/schemes/kcc",
+      "https://fasalrin.gov.in/about",
+      "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+      "https://www.mudra.org.in",
+      "https://www.cgtmse.in/Home/VS/3",
+      "https://aajeevika.gov.in/sites/default/files/nrlm-guidelines.pdf",
+      "https://canarabank.com/pages/Interest-Subvention-Scheme-for-Women-SHGs",
+      "https://sachet.rbi.org.in",
+      "https://www.sidbi.in",
+      "https://www.kviconline.gov.in/pmegpeportal/pmegphome/index.jsp",
+      "https://pmjdy.gov.in",
+      "https://www.eclgs.com",
+      "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12096"
+    ]
+  },
+  "schemes": [
+    {
+      "id": "stand_up_india",
+      "name": "Stand-Up India Scheme",
+      "category": "Enterprise Development / Bank Loan",
+      "url": "https://www.standupmitra.in/Home/SchemeGuidelines",
+      "description": "Bank loans between ₹10 lakh and ₹1 crore to SC/ST and women entrepreneurs for greenfield enterprises.",
+      "eligibility": {
+        "beneficiaries": "At least one SC/ST or woman borrower per bank branch, aged 18+ with controlling stake (51% for non-individual enterprises)",
+        "loan_amount": "₹10 lakh to ₹1 crore with EBLR+3.25% interest rate (currently 12.15%)",
+        "collateral": "Covered under CGSSI with up to 80% guarantee coverage, no additional collateral required",
+        "special_conditions": "Only for greenfield enterprises in manufacturing, services, agri-allied activities or trading sector"
+      },
+      "benefits": [
+        "Credit guarantee coverage up to 80% of loan amount",
+        "Handholding support for training and business development",
+        "Priority lending through dedicated bank branches"
+      ],
+      "required_documents": [
+        "Identity proof (Aadhaar/PAN/Voter ID)",
+        "SC/ST certificate or proof of being woman entrepreneur",
+        "Business plan and project report",
+        "Address proof",
+        "Bank account details"
+      ],
+      "subsidy_or_interest": "Interest rate at EBLR+3.25% with credit guarantee covering 80% of loan amount, reducing collateral burden",
+      "validity": "Extended up to 2025"
+    },
+    {
+      "id": "day_nulm",
+      "name": "Deendayal Antyodaya Yojana - National Urban Livelihoods Mission (DAY-NULM)",
+      "category": "Urban Livelihood Development / Skill Training",
+      "url": "https://nulm.gov.in/PDF/NULM_Mission/NULM_mission_document.pdf",
+      "description": "Comprehensive mission to reduce poverty and vulnerability of urban poor through self-employment and skilled wage employment opportunities.",
+      "eligibility": {
+        "beneficiaries": "Urban poor households, including homeless, street vendors, SCs, STs, minorities, women, disabled persons in cities with 1+ lakh population",
+        "loan_amount": "₹2 lakh for individual enterprises, ₹10 lakh for group enterprises with interest subsidy above 7%",
+        "collateral": "No collateral required other than the micro-enterprise itself",
+        "special_conditions": "30% reservation for women, proportional representation for SCs/STs, 3% for differently-abled, 15% for minorities"
+      },
+      "benefits": [
+        "Skills training up to ₹15,000 per beneficiary (₹18,000 for NE states)",
+        "Interest subsidy above 7% for individual/group enterprises",
+        "Additional 3% interest subvention for women SHGs with timely repayment",
+        "Revolving fund ₹10,000 per SHG and ₹50,000 per Area Level Federation"
+      ],
+      "required_documents": [
+        "Identity proof and address proof",
+        "Income certificate/BPL card",
+        "Caste certificate (if applicable)",
+        "Disability certificate (if applicable)",
+        "Bank account details"
+      ],
+      "subsidy_or_interest": "Interest subsidy above 7% rate for enterprises, additional 3% subvention for women SHGs on timely repayment",
+      "validity": "Ongoing central government mission"
+    },
+    {
+      "id": "pmay_urban",
+      "name": "Pradhan Mantri Awas Yojana - Urban (PMAY-U)",
+      "category": "Housing Finance / Home Loans",
+      "url": "https://pmay-urban.gov.in/uploads/guidelines/Operational-Guidelines-of-PMAY-U-2.pdf",
+      "description": "Provides financial assistance to eligible urban families for constructing or purchasing affordable houses.",
+      "eligibility": {
+        "beneficiaries": "EWS, LIG, and MIG families who don't own pucca house in India",
+        "loan_amount": "Central assistance up to ₹2.5 lakh for EWS/LIG, varies by category and location",
+        "collateral": "As per lending institution's norms, typically the property itself",
+        "special_conditions": "Adult female member should be owner/co-owner of the house, family shouldn't have availed central assistance under any housing scheme"
+      },
+      "benefits": [
+        "Central assistance ranging from ₹1 lakh to ₹2.5 lakh",
+        "Interest subsidy under CLSS for eligible categories",
+        "Preference for female ownership/co-ownership",
+        "Converged benefits with other government schemes"
+      ],
+      "required_documents": [
+        "Aadhaar card of all family members",
+        "Income certificate",
+        "Bank account details",
+        "Property documents",
+        "Affidavit for not owning house"
+      ],
+      "subsidy_or_interest": "Central assistance amount varies by category, CLSS provides interest subsidy on home loans for eligible income groups",
+      "validity": "PMAY-U 2.0 implementation period extended, registration deadline till December 2025"
+    },
+    {
+      "id": "clss",
+      "name": "Credit Linked Subsidy Scheme (CLSS)",
+      "category": "Housing Finance / Home Loan Subsidy",
+      "url": "https://pmaymis.gov.in/PDF/CLSS_Guidelines.pdf",
+      "description": "Interest subsidy on home loans for EWS, LIG, and MIG categories under PMAY-Urban.",
+      "eligibility": {
+        "beneficiaries": "EWS (up to ₹3 lakh annual income), LIG (₹3-6 lakh), MIG-I (₹6-12 lakh), MIG-II (₹12-18 lakh)",
+        "loan_amount": "Up to ₹6 lakh for EWS/LIG, ₹9 lakh for MIG-I, ₹12 lakh for MIG-II (loan amounts)",
+        "collateral": "Property being financed serves as primary security",
+        "special_conditions": "House should not exceed carpet area limits, family shouldn't own pucca house"
+      },
+      "benefits": [
+        "Interest subsidy of 6.5% for EWS/LIG on loans up to ₹6 lakh",
+        "Interest subsidy of 4% for MIG-I on loans up to ₹9 lakh",
+        "Interest subsidy of 3% for MIG-II on loans up to ₹12 lakh",
+        "Subsidy calculated on NPV for loan tenure up to 20 years"
+      ],
+      "required_documents": [
+        "Income certificate from competent authority",
+        "Property documents and approval plans",
+        "Bank loan sanction letter",
+        "Aadhaar and PAN cards",
+        "Affidavit for house ownership"
+      ],
+      "subsidy_or_interest": "Interest subsidy ranges from 3% to 6.5% depending on income category, calculated on NPV basis for maximum 20 years or actual loan tenure, whichever is lower",
+      "validity": "Part of PMAY-U mission, extended till 2025"
+    },
+    {
+      "id": "pm_vidyalaxmi",
+      "name": "PM Vidyalaxmi Scheme",
+      "category": "Education Loans",
+      "url": "https://www.education.gov.in/sites/upload_files/mhrd/files/document-reports/PM_Vidyalaxmi_Scheme_Guidelines.pdf",
+      "description": "Education loan scheme for students pursuing higher education with government guarantee.",
+      "eligibility": {
+        "beneficiaries": "Students pursuing higher education in recognized institutions, family income criteria apply",
+        "loan_amount": "Up to ₹10 lakh for studies in India, ₹20 lakh for studies abroad",
+        "collateral": "No collateral for loans up to ₹4 lakh, third-party guarantee for ₹4-7.5 lakh",
+        "special_conditions": "Admission to eligible courses in recognized institutions, good academic record"
+      },
+      "benefits": [
+        "Government guarantee reduces bank risk",
+        "Moratorium on repayment during study period plus one year",
+        "Simple interest during moratorium period",
+        "Coverage for tuition fees, hostel charges, books, and equipment"
+      ],
+      "required_documents": [
+        "Admission letter from recognized institution",
+        "Academic certificates and mark sheets",
+        "Income certificate of parents/guardians",
+        "Identity and address proof",
+        "Cost estimate from institution"
+      ],
+      "subsidy_or_interest": "Interest subvention available for economically weaker sections, moratorium period with simple interest",
+      "validity": "Ongoing scheme"
+    },
+    {
+      "id": "kisan_credit_card",
+      "name": "Kisan Credit Card (KCC)",
+      "category": "Agricultural Credit",
+      "url": "https://www.myscheme.gov.in/schemes/kcc",
+      "description": "Credit facility to farmers for crop production, maintenance, and contingency expenses.",
+      "eligibility": {
+        "beneficiaries": "All farmers including tenant farmers, oral lessees, sharecroppers with proper documentation",
+        "loan_amount": "Based on operational land holding, cropping pattern, and scale of finance, typically ₹3 lakh limit",
+        "collateral": "No collateral for loans up to ₹1.6 lakh, land records serve as security",
+        "special_conditions": "Valid land records or tenancy agreement, crop cultivation proof"
+      },
+      "benefits": [
+        "Flexible credit limit based on crop cycle",
+        "Interest subvention making effective rate 4% for timely repayment",
+        "Accident insurance up to ₹50,000 with add-on insurance",
+        "Simple application process through common service centers"
+      ],
+      "required_documents": [
+        "Land ownership documents or tenancy proof",
+        "Identity proof (Aadhaar preferred)",
+        "Address proof",
+        "Two passport size photographs",
+        "Security post-dated cheques"
+      ],
+      "subsidy_or_interest": "Interest subvention of 3% per annum subject to timely repayment, making effective interest rate 4% per annum",
+      "validity": "Ongoing scheme with periodic renewals"
+    },
+    {
+      "id": "pm_fasal_bima",
+      "name": "Pradhan Mantri Fasal Bima Yojana (PMFBY)",
+      "category": "Agricultural Insurance",
+      "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+      "description": "Crop insurance scheme providing financial support to farmers suffering crop loss/damage.",
+      "eligibility": {
+        "beneficiaries": "All farmers growing notified crops in notified areas, including sharecroppers and tenant farmers",
+        "loan_amount": "Insurance coverage up to sum insured based on scale of finance",
+        "collateral": "Not applicable as it's insurance scheme",
+        "special_conditions": "Compulsory for loanee farmers, voluntary for others, crops must be notified"
+      },
+      "benefits": [
+        "Low premium rates: 2% for Kharif, 1.5% for Rabi crops",
+        "Coverage for pre-sowing to post-harvest losses",
+        "Use of technology for quick claim settlement",
+        "Localized calamity and individual farm-level assessment"
+      ],
+      "required_documents": [
+        "Land records/tenancy agreement",
+        "Aadhaar card and bank account details",
+        "Sowing certificate from village officer",
+        "Cutting experiment receipt",
+        "Claim form and supporting documents for claims"
+      ],
+      "subsidy_or_interest": "Government provides subsidy on premium, farmers pay only 2% for Kharif and 1.5% for Rabi crops, balance borne by Centre and State",
+      "validity": "Ongoing scheme with annual implementation"
+    },
+    {
+      "id": "pmmy",
+      "name": "Pradhan Mantri Mudra Yojana (PMMY)",
+      "category": "Micro Enterprise Loans",
+      "url": "https://www.mudra.org.in",
+      "description": "Collateral-free loans up to ₹20 lakh to non-corporate, non-farm small/micro enterprises under three categories.",
+      "eligibility": {
+        "beneficiaries": "Non-corporate, non-farm micro/small enterprises including women entrepreneurs, minorities, SCs/STs",
+        "loan_amount": "Shishu: up to ₹50,000, Kishore: ₹50,000 to ₹5 lakh, Tarun: ₹5 lakh to ₹10 lakh, Tarun Plus: up to ₹20 lakh",
+        "collateral": "No collateral required, asset created from loan serves as security",
+        "special_conditions": "Business should be in manufacturing, trading, or service sector, excluding agriculture"
+      },
+      "benefits": [
+        "Collateral-free credit facility",
+        "Online application through Udyamimitra portal",
+        "Mudra Card facility for Tarun category borrowers",
+        "Insurance coverage available"
+      ],
+      "required_documents": [
+        "Identity proof (Aadhaar/PAN/Voter ID)",
+        "Address proof",
+        "Business registration/license",
+        "Bank account statements",
+        "Project report for higher loan amounts"
+      ],
+      "subsidy_or_interest": "Interest rates decided by lending institutions, typically EBLR+3.25% (effective 12.15%), no processing fee for Shishu category",
+      "validity": "Ongoing scheme, Tarun Plus category introduced in 2025"
+    },
+    {
+      "id": "cgtmse",
+      "name": "Credit Guarantee Fund Trust for Micro and Small Enterprises (CGTMSE)",
+      "category": "Credit Guarantee Scheme",
+      "url": "https://www.cgtmse.in/Home/VS/3",
+      "description": "Provides collateral-free credit guarantee to micro and small enterprises up to ₹10 crore.",
+      "eligibility": {
+        "beneficiaries": "Micro and Small Enterprises as per MSME definition, with Udyam Registration Number",
+        "loan_amount": "Up to ₹10 crore credit facility with guarantee coverage",
+        "collateral": "No collateral or third-party guarantee required up to ₹5 crore",
+        "special_conditions": "Excludes agriculture, SHGs, JLGs; borrower must have IT-PAN"
+      },
+      "benefits": [
+        "Guarantee coverage up to 85% for loans up to ₹5 lakh",
+        "Guarantee coverage up to 80% for loans above ₹5 lakh",
+        "Reduced guarantee fees starting from 0.37% per annum",
+        "Enhanced access to formal credit for MSEs"
+      ],
+      "required_documents": [
+        "Udyam Registration Certificate",
+        "PAN card and Aadhaar card",
+        "Bank account statements",
+        "Business plan and financial projections",
+        "GST registration certificate"
+      ],
+      "subsidy_or_interest": "Guarantee fee ranges from 0.37% to 0.60% per annum based on loan amount, significantly reduced rates from April 2025",
+      "validity": "Enhanced scheme with increased limit to ₹10 crore from April 2025"
+    },
+    {
+      "id": "day_nrlm",
+      "name": "Deendayal Antyodaya Yojana - National Rural Livelihoods Mission (DAY-NRLM)",
+      "category": "Rural Livelihood Development",
+      "url": "https://aajeevika.gov.in/sites/default/files/nrlm-guidelines.pdf",
+      "description": "Poverty alleviation program focusing on promoting self-employment and organization of rural poor into SHGs.",
+      "eligibility": {
+        "beneficiaries": "Rural poor households, particularly women, organized into Self-Help Groups",
+        "loan_amount": "Revolving Fund ₹15,000 per SHG, Community Investment Fund up to ₹1.5 lakh per SHG",
+        "collateral": "No collateral required for SHG loans",
+        "special_conditions": "Priority for women, SCs, STs, minorities, and vulnerable groups"
+      },
+      "benefits": [
+        "Interest subvention of 7% per annum on bank loans to SHGs",
+        "Capacity building and skill development training",
+        "Market linkage support for SHG enterprises",
+        "Financial inclusion through bank linkage"
+      ],
+      "required_documents": [
+        "SHG registration documents",
+        "Member identification and address proof",
+        "Bank account details of SHG",
+        "Meeting minutes and resolutions",
+        "Loan utilization certificates"
+      ],
+      "subsidy_or_interest": "Interest subvention of 3% per annum on prompt repayment, additional 3% for women SHGs, making effective rate 7%",
+      "validity": "Ongoing mission till 2025-26"
+    },
+    {
+      "id": "interest_subvention_shg",
+      "name": "Interest Subvention Scheme for Women SHGs",
+      "category": "Interest Subsidy / SHG Credit",
+      "url": "https://canarabank.com/pages/Interest-Subvention-Scheme-for-Women-SHGs",
+      "description": "Interest rate subsidy for women Self-Help Groups to promote financial inclusion.",
+      "eligibility": {
+        "beneficiaries": "Women Self-Help Groups with good track record and proper book-keeping",
+        "loan_amount": "Bank loans to SHGs as per RBI guidelines",
+        "collateral": "No collateral required for SHG loans",
+        "special_conditions": "SHG should be in existence for at least 6 months with regular savings"
+      },
+      "benefits": [
+        "Interest rate reduced to 7% per annum for prompt repaying SHGs",
+        "Additional 3% subvention for women SHGs making effective rate 4%",
+        "Encourages women's participation in economic activities",
+        "Builds credit history for future borrowings"
+      ],
+      "required_documents": [
+        "SHG registration certificate",
+        "Bank account details and passbooks",
+        "Member list with identification proof",
+        "Audit reports and financial statements",
+        "Loan application and utilization plan"
+      ],
+      "subsidy_or_interest": "Total interest subvention of 6% per annum (3% general + 3% additional for women), making effective interest rate 4% for prompt repayment",
+      "validity": "Ongoing scheme as part of financial inclusion initiatives"
+    },
+    {
+      "id": "pmegp",
+      "name": "Prime Minister's Employment Generation Programme (PMEGP)",
+      "category": "Employment Generation / Self-Employment",
+      "url": "https://www.kviconline.gov.in/pmegpeportal/pmegphome/index.jsp",
+      "description": "Credit-linked subsidy programme for generating self-employment opportunities in rural and urban areas.",
+      "eligibility": {
+        "beneficiaries": "Any individual above 18 years with educational qualification of at least 8th pass",
+        "loan_amount": "Up to ₹25 lakh for manufacturing and ₹10 lakh for service sector",
+        "collateral": "Security as per bank norms for loans above ₹10 lakh",
+        "special_conditions": "At least 8th pass, no existing enterprise, not defaulter of any bank/financial institution"
+      },
+      "benefits": [
+        "Margin money subsidy: 35% in rural areas, 25% in urban areas for general category",
+        "For SC/ST/OBC/minorities/women/ex-servicemen/physically handicapped/NER: 35% (urban), 35% (rural)",
+        "Credit linked back-ended subsidy",
+        "Training support and handholding"
+      ],
+      "required_documents": [
+        "Educational qualification certificates",
+        "Identity proof and address proof",
+        "Caste certificate (if applicable)",
+        "Project report and cost estimates",
+        "Bank account details"
+      ],
+      "subsidy_or_interest": "Margin money subsidy ranges from 25% to 35% of project cost depending on category and location, maximum subsidy ₹5 lakh for service and ₹12.5 lakh for manufacturing",
+      "validity": "15th Finance Commission period till 2025-26"
+    },
+    {
+      "id": "pmjdy_rupay_credit",
+      "name": "PMJDY RuPay Credit Card",
+      "category": "Financial Inclusion / Credit Cards",
+      "url": "https://pmjdy.gov.in",
+      "description": "Credit cards issued to PMJDY account holders to promote digital payments and credit access.",
+      "eligibility": {
+        "beneficiaries": "PMJDY account holders with good transaction history and credit score",
+        "loan_amount": "Credit limit as per bank's assessment, typically starting from ₹5,000",
+        "collateral": "No collateral required",
+        "special_conditions": "Account should be operational for at least 12 months with regular transactions"
+      },
+      "benefits": [
+        "Easy access to credit for PMJDY account holders",
+        "Digital payment facility",
+        "Building credit history for future borrowings",
+        "Financial inclusion of unbanked population"
+      ],
+      "required_documents": [
+        "PMJDY account details",
+        "Aadhaar card and PAN card",
+        "Income proof or ITR",
+        "Bank account statements",
+        "Address verification documents"
+      ],
+      "subsidy_or_interest": "Interest rates as per bank's policy, typically 1.5-3% per month on outstanding balance",
+      "validity": "Ongoing under PMJDY mission"
+    },
+    {
+      "id": "mudra_card",
+      "name": "Mudra Card",
+      "category": "Working Capital / Digital Payments",
+      "url": "https://www.mudra.org.in",
+      "description": "RuPay debit card cum credit card for Mudra loan borrowers to meet working capital needs.",
+      "eligibility": {
+        "beneficiaries": "Mudra loan borrowers, particularly Tarun category (₹5-10 lakh) borrowers",
+        "loan_amount": "Credit limit linked to loan amount and repayment capacity",
+        "collateral": "Backed by existing Mudra loan collateral",
+        "special_conditions": "Good repayment track record in existing Mudra loan"
+      },
+      "benefits": [
+        "Easy access to working capital",
+        "Digital transaction facility",
+        "Reduces cash handling and improves cash flow",
+        "Linked to Mudra loan account for seamless integration"
+      ],
+      "required_documents": [
+        "Existing Mudra loan account details",
+        "Aadhaar card and PAN card",
+        "Business registration documents",
+        "Bank account statements",
+        "ITR or financial statements"
+      ],
+      "subsidy_or_interest": "Interest charged on utilized amount as per Mudra loan terms, typically EBLR+3.25%",
+      "validity": "Available for eligible Mudra borrowers"
+    },
+    {
+      "id": "eclgs",
+      "name": "Emergency Credit Line Guarantee Scheme (ECLGS)",
+      "category": "Emergency Credit / COVID Relief",
+      "url": "https://www.eclgs.com",
+      "description": "Emergency credit facility with 100% guarantee coverage for businesses affected by COVID-19.",
+      "eligibility": {
+        "beneficiaries": "MSMEs, Business Enterprises, MUDRA borrowers, individuals with GST registration",
+        "loan_amount": "Up to ₹5 crore or 40% of outstanding credit as on Feb 29, 2020",
+        "collateral": "No additional collateral required, 100% guarantee by NCGTC",
+        "special_conditions": "Account should have been standard as on Feb 29, 2020, not more than 30 days past due"
+      },
+      "benefits": [
+        "100% guarantee coverage by National Credit Guarantee Trustee Company",
+        "Moratorium of 12 months on principal repayment",
+        "Tenor up to 6 years including moratorium",
+        "Quick processing and disbursal"
+      ],
+      "required_documents": [
+        "GST registration certificate",
+        "Bank account statements (Feb 2020)",
+        "Audited financial statements",
+        "Self-certification of eligibility",
+        "Loan application form"
+      ],
+      "subsidy_or_interest": "Interest rate capped at 9.25% for loans up to ₹2 crore and EBLR+3.5% for above ₹2 crore",
+      "validity": "Extended multiple times, currently available with modifications"
+    },
+    {
+      "id": "rbi_resolution_framework",
+      "name": "RBI Resolution Framework 2.0",
+      "category": "Loan Restructuring / COVID Relief",
+      "url": "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12096",
+      "description": "Framework for resolution of COVID-19 related stress without asset classification downgrade.",
+      "eligibility": {
+        "beneficiaries": "Individual and MSME borrowers whose accounts were classified as standard but not in default for more than 30 days as on March 31, 2021",
+        "loan_amount": "Restructuring of existing loans as per borrower's repayment capacity",
+        "collateral": "Existing collateral arrangements continue",
+        "special_conditions": "One-time restructuring, implementation by September 30, 2021 with extensions"
+      },
+      "benefits": [
+        "Asset classification benefit during restructuring period",
+        "Moratorium on payments up to 2 years",
+        "Conversion of interest into funded interest term loan",
+        "Extension of residual tenor up to 2 years"
+      ],
+      "required_documents": [
+        "Application for restructuring",
+        "Financial statements and income proof",
+        "Impact assessment due to COVID-19",
+        "Revised repayment schedule",
+        "Board resolution (for entities)"
+      ],
+      "subsidy_or_interest": "Interest rates as per original loan terms, conversion of unpaid interest into FITL at same rate",
+      "validity": "Framework implemented with specific timelines, benefits continue as per restructured terms"
+    }
+  ]
+}

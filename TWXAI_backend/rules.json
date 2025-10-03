@@ -1,0 +1,1384 @@
+{
+  "metadata": {
+    "version": "3.0",
+    "description": "Complete RBI/PSL compliance, KYC, credit scoring, fraud detection, and government scheme eligibility rules",
+    "last_updated": "2025-09-23",
+    "regulatory_basis": [
+      "RBI PSL Master Directions 2025 (RBI/FIDD/2024-25/128)",
+      "RBI Digital Lending Guidelines 2022 & 2025 Updates",
+      "RBI Master Direction on KYC (RBI/DBR/2015-16/18) Updated Aug 2025",
+      "Constitutional Articles 14, 21, 38, 39(b), 46",
+      "Master Direction on MSME Lending (FIDD.MSME & NFS.12/06.02.31/2017-18)",
+      "Master Direction on Microfinance Loans (March 14, 2022)",
+      "Credit Information Companies Regulation Act 2005",
+      "RBI Fair Practices Code for Lenders"
+    ],
+    "source_documents": [
+      "https://www.fidcindia.org.in/wp-content/uploads/2025/03/RBI-PSL-MASTER-DIRECTIONS-24-03-25.pdf",
+      "https://cdnbbsr.s3waas.gov.in/s380537a945c7aaa788ccfcdf1b99b5d8f/uploads/2024/07/20240716890312078.pdf",
+      "https://fidcindia.org.in/wp-content/uploads/2022/09/RBI-GUIDELINES-ON-DIGITAL-LENDING-02-09-22.pdf"
+    ]
+  },
+  "rule_categories": {
+    "psl_compliance": "Priority Sector Lending regulatory compliance",
+    "credit_scoring": "Credit assessment and scoring rules",
+    "kyc_documentation": "Know Your Customer and document verification",
+    "interest_affordability": "Interest rate and affordability checks", 
+    "loan_tenure": "Maximum tenure and amortization rules",
+    "cross_exposure": "Multi-loan and cross-exposure checks",
+    "fraud_aml": "Fraud detection and Anti-Money Laundering",
+    "dynamic_monitoring": "Real-time PSL target and limit monitoring",
+    "appeals_workflow": "Exception handling and appeals process",
+    "constitutional_compliance": "Constitutional fairness and non-discrimination"
+  },
+  "rules": [
+    {
+      "id": "credit_score_minimum_threshold",
+      "category": "credit_scoring",
+      "description": "Credit Score minimum thresholds based on loan type and amount (RBI Fair Practices Code)",
+      "severity": "hard",
+      "loan_types": ["home", "personal", "vehicle", "education"],
+      "regulatory_source": "RBI Fair Practices Code & Digital Lending Guidelines 2025",
+      "conditions": [
+        {
+          "field": "loan_type",
+          "operator": "eq",
+          "value": "personal",
+          "sub_conditions": [
+            {
+              "field": "loan_amount",
+              "operator": "gte",
+              "value": 500000,
+              "required_cibil_score": 650
+            },
+            {
+              "field": "loan_amount",
+              "operator": "lt",
+              "value": 500000,
+              "required_cibil_score": 600
+            }
+          ]
+        },
+        {
+          "field": "loan_type",
+          "operator": "eq", 
+          "value": "home",
+          "sub_conditions": [
+            {
+              "field": "loan_amount",
+              "operator": "gte",
+              "value": 2000000,
+              "required_cibil_score": 750
+            },
+            {
+              "field": "loan_amount",
+              "operator": "lt",
+              "value": 2000000,
+              "required_cibil_score": 700
+            }
+          ]
+        },
+        {
+          "field": "loan_type",
+          "operator": "eq",
+          "value": "education", 
+          "sub_conditions": [
+            {
+              "field": "loan_amount",
+              "operator": "gte",
+              "value": 1000000,
+              "required_cibil_score": 650
+            },
+            {
+              "field": "loan_amount",
+              "operator": "lt",
+              "value": 1000000,
+              "required_cibil_score": 600
+            }
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "classify_weaker_section"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Individual women borrower - contributes to 12% weaker sections target"
+        }
+      ]
+    },
+    {
+      "id": "weaker_sections_transgenders",
+      "category": "psl_compliance",
+      "description": "RBI PSL Weaker Sections - Transgenders inclusion (Para 17.1.xii)",
+      "severity": "soft",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 17.1.xii",
+      "conditions": [
+        {
+          "field": "gender",
+          "operator": "eq",
+          "value": "transgender"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "classify_weaker_section"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Transgender borrower - automatic weaker section classification"
+        }
+      ]
+    },
+    {
+      "id": "weaker_sections_sc_st",
+      "category": "psl_compliance",
+      "description": "RBI PSL Weaker Sections - Scheduled Castes and Scheduled Tribes (Para 17.1.iv)",
+      "severity": "soft",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 17.1.iv",
+      "conditions": [
+        {
+          "field": "caste_category",
+          "operator": "in",
+          "value": ["sc", "st"]
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "classify_weaker_section"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "SC/ST borrower - automatic weaker section classification"
+        }
+      ]
+    },
+    {
+      "id": "digital_lending_processing_fee_cap",
+      "category": "interest_affordability",
+      "description": "RBI Digital Lending Guidelines - Processing fee and charge caps",
+      "severity": "hard",
+      "loan_types": ["personal", "business", "msme"],
+      "regulatory_source": "RBI Digital Lending Guidelines 2022 - Fee Structure Regulations",
+      "conditions": [
+        {
+          "field": "processing_fee_percent",
+          "operator": "lte",
+          "value": 3,
+          "description": "Processing fee cannot exceed 3% of loan amount"
+        },
+        {
+          "field": "pre_closure_penalty_months",
+          "operator": "lte",
+          "value": 6,
+          "description": "No pre-closure penalty after 6 months"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_fee_compliance"
+        },
+        {
+          "type": "reject",
+          "reason": "Processing fees or penalties exceed RBI digital lending limits"
+        }
+      ]
+    },
+    {
+      "id": "loan_to_value_ratio_home_loans",
+      "category": "credit_scoring",
+      "description": "Loan-to-Value ratio limits for home loans based on loan amount",
+      "severity": "hard",
+      "loan_types": ["home", "housing"],
+      "regulatory_source": "RBI Housing Finance Guidelines & NHB Directions",
+      "conditions": [
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 3000000,
+          "ltv_limit": 90,
+          "description": "Up to ₹30 lakh - max 90% LTV"
+        },
+        {
+          "field": "loan_amount",
+          "operator": "gt",
+          "value": 3000000,
+          "sub_conditions": [
+            {
+              "field": "loan_amount",
+              "operator": "lte", 
+              "value": 7500000,
+              "ltv_limit": 80,
+              "description": "₹30 lakh to ₹75 lakh - max 80% LTV"
+            },
+            {
+              "field": "loan_amount",
+              "operator": "gt",
+              "value": 7500000,
+              "ltv_limit": 75,
+              "description": "Above ₹75 lakh - max 75% LTV"
+            }
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_ltv_compliance"
+        },
+        {
+          "type": "adjust_loan_amount",
+          "reason": "Reduce loan amount to meet LTV requirements"
+        }
+      ]
+    },
+    {
+      "id": "vehicle_loan_ltv_limits",
+      "category": "credit_scoring",
+      "description": "Loan-to-Value ratio limits for vehicle loans",
+      "severity": "hard",
+      "loan_types": ["vehicle", "auto"],
+      "regulatory_source": "RBI Vehicle Finance Guidelines",
+      "conditions": [
+        {
+          "field": "vehicle_type",
+          "operator": "eq",
+          "value": "two_wheeler",
+          "ltv_limit": 85,
+          "description": "Two-wheelers - max 85% LTV"
+        },
+        {
+          "field": "vehicle_type",
+          "operator": "eq",
+          "value": "passenger_car",
+          "ltv_limit": 90,
+          "description": "Passenger cars - max 90% LTV"
+        },
+        {
+          "field": "vehicle_type",
+          "operator": "eq",
+          "value": "commercial_vehicle",
+          "ltv_limit": 75,
+          "description": "Commercial vehicles - max 75% LTV"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_vehicle_ltv"
+        }
+      ]
+    },
+    {
+      "id": "debt_to_income_ratio_limits",
+      "category": "credit_scoring",
+      "description": "Debt-to-Income ratio limits for different loan types",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Prudential Norms for Income Assessment",
+      "conditions": [
+        {
+          "field": "loan_type",
+          "operator": "eq",
+          "value": "home",
+          "max_dti_ratio": 60,
+          "description": "Home loans - max 60% DTI including proposed EMI"
+        },
+        {
+          "field": "loan_type",
+          "operator": "eq",
+          "value": "personal",
+          "max_dti_ratio": 50,
+          "description": "Personal loans - max 50% DTI"
+        },
+        {
+          "field": "loan_type",
+          "operator": "in",
+          "value": ["vehicle", "education"],
+          "max_dti_ratio": 55,
+          "description": "Vehicle/Education loans - max 55% DTI"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_dti_compliance"
+        },
+        {
+          "type": "reject",
+          "reason": "Debt-to-Income ratio exceeds prudential limits"
+        }
+      ]
+    },
+    {
+      "id": "employment_stability_requirements",
+      "category": "credit_scoring", 
+      "description": "Minimum employment stability requirements by loan type",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Income Verification Guidelines",
+      "conditions": [
+        {
+          "field": "employment_type",
+          "operator": "eq",
+          "value": "salaried",
+          "min_job_tenure_months": 12,
+          "description": "Salaried - minimum 12 months current employment"
+        },
+        {
+          "field": "employment_type", 
+          "operator": "eq",
+          "value": "self_employed_business",
+          "min_business_vintage_years": 2,
+          "description": "Self-employed business - minimum 2 years business vintage"
+        },
+        {
+          "field": "employment_type",
+          "operator": "eq",
+          "value": "self_employed_professional",
+          "min_practice_years": 3,
+          "description": "Self-employed professional - minimum 3 years practice"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_employment_stability"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Employment stability below minimum requirements"
+        }
+      ]
+    },
+    {
+      "id": "co_applicant_income_clubbing_rules",
+      "category": "credit_scoring",
+      "description": "Co-applicant income clubbing rules for joint loans",
+      "severity": "soft",
+      "loan_types": ["home", "vehicle", "personal"],
+      "regulatory_source": "RBI Joint Borrower Guidelines",
+      "conditions": [
+        {
+          "field": "co_applicant_present",
+          "operator": "eq",
+          "value": true
+        },
+        {
+          "field": "co_applicant_relationship",
+          "operator": "in",
+          "value": ["spouse", "parent", "child"],
+          "income_clubbing_percent": 100,
+          "description": "100% income clubbing for immediate family"
+        },
+        {
+          "field": "co_applicant_relationship",
+          "operator": "in",
+          "value": ["sibling", "in_law"],
+          "income_clubbing_percent": 50,
+          "description": "50% income clubbing for extended family"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "calculate_joint_income_eligibility"
+        }
+      ]
+    },
+    {
+      "id": "negative_area_lending_restrictions",
+      "category": "fraud_aml",
+      "description": "Lending restrictions in RBI negative/caution areas",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Area-wise Lending Guidelines & SARFAESI Act",
+      "conditions": [
+        {
+          "field": "property_pincode",
+          "operator": "in",
+          "value": "rbi_negative_area_list",
+          "description": "Property located in RBI negative area"
+        },
+        {
+          "field": "borrower_address_pincode",
+          "operator": "in", 
+          "value": "rbi_caution_area_list",
+          "description": "Borrower from RBI caution area"
+        }
+      ],
+      "actions": [
+        {
+          "type": "enhanced_due_diligence",
+          "value": "negative_area_verification"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Negative/Caution area lending - enhanced verification required"
+        }
+      ]
+    },
+    {
+      "id": "wilful_defaulter_database_check",
+      "category": "fraud_aml",
+      "description": "Wilful defaulter database verification check",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Wilful Defaulters Database & Master Circular",
+      "conditions": [
+        {
+          "field": "wilful_defaulter_check",
+          "operator": "eq",
+          "value": "positive_match"
+        },
+        {
+          "field": "borrower_directors_defaulter_status",
+          "operator": "eq",
+          "value": "wilful_defaulter"
+        }
+      ],
+      "actions": [
+        {
+          "type": "reject",
+          "value": "wilful_defaulter_identified"
+        },
+        {
+          "type": "report_to_rbi",
+          "reason": "Wilful defaulter attempting fresh loan - regulatory reporting required"
+        }
+      ]
+    },
+    {
+      "id": "threshold_adjustment_near_miss_cases",
+      "category": "appeals_workflow",
+      "description": "Threshold adjustment for near-miss approval cases",
+      "severity": "soft",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Fair Lending Practices - Credit Decision Review",
+      "conditions": [
+        {
+          "field": "model_probability",
+          "operator": "gte",
+          "value": 0.45
+        },
+        {
+          "field": "model_probability",
+          "operator": "lt",
+          "value": 0.50
+        },
+        {
+          "field": "psl_eligible",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "actions": [
+        {
+          "type": "human_review_recommended",
+          "value": "near_miss_psl_case"
+        },
+        {
+          "type": "consider_threshold_adjustment",
+          "reason": "PSL-eligible near-miss case - consider manual approval"
+        }
+      ]
+    },
+    {
+      "id": "senior_citizen_special_provisions",
+      "category": "constitutional_compliance",
+      "description": "Special lending provisions for senior citizens (60+ years)",
+      "severity": "soft", 
+      "loan_types": ["personal", "home", "medical"],
+      "regulatory_source": "Senior Citizens Act 2007 & RBI Elderly Customer Guidelines",
+      "conditions": [
+        {
+          "field": "applicant_age",
+          "operator": "gte",
+          "value": 60
+        }
+      ],
+      "special_provisions": [
+        {
+          "type": "interest_rate_concession",
+          "value": 0.5,
+          "description": "0.5% interest rate concession for senior citizens"
+        },
+        {
+          "type": "relaxed_income_criteria",
+          "description": "Consider pension/retirement income"
+        },
+        {
+          "type": "simplified_documentation",
+          "description": "Reduced documentation requirements"
+        }
+      ],
+      "actions": [
+        {
+          "type": "apply_senior_citizen_benefits",
+          "value": "elderly_customer_provisions"
+        }
+      ]
+    },
+    {
+      "id": "women_entrepreneur_priority_lending",
+      "category": "constitutional_compliance",
+      "description": "Priority lending provisions for women entrepreneurs",
+      "severity": "soft",
+      "loan_types": ["business", "msme", "startup"],
+      "regulatory_source": "Women Entrepreneurship Platform & RBI Priority Lending",
+      "conditions": [
+        {
+          "field": "gender",
+          "operator": "eq", 
+          "value": "female"
+        },
+        {
+          "field": "loan_purpose",
+          "operator": "in",
+          "value": ["business_expansion", "startup", "working_capital"]
+        },
+        {
+          "field": "business_ownership_percent",
+          "operator": "gte",
+          "value": 51,
+          "description": "Minimum 51% women ownership"
+        }
+      ],
+      "actions": [
+        {
+          "type": "priority_processing",
+          "value": "women_entrepreneur_fast_track"
+        },
+        {
+          "type": "interest_rate_benefit",
+          "value": "concessional_rate_applicable"
+        }
+      ]
+    }
+  ],
+  "government_schemes_integration": {
+    "scheme_categories": {
+      "agriculture_rural": ["kisan_credit_card", "pmfby", "pm_kisan", "nabard_schemes"],
+      "msme_business": ["mudra_yojana", "cgtmse", "standup_india", "pmegp"],
+      "housing": ["pmay_urban", "pmay_gramin", "clss", "affordable_housing"],
+      "education": ["pm_vidyalaxmi", "padho_pardesh", "education_loan_scheme"],
+      "women_empowerment": ["standup_india_women", "dena_shakti", "annapurna_scheme"],
+      "minority_welfare": ["seekho_aur_kamao", "usttad", "padho_pardesh"],
+      "sc_st_welfare": ["standup_india_scst", "nsfdc_schemes", "nskfdc_schemes"]
+    },
+    "eligibility_matching_rules": [
+      {
+        "scheme": "mudra_shishu",
+        "max_loan_amount": 50000,
+        "eligibility": {
+          "loan_type": ["business", "msme"],
+          "collateral_required": false,
+          "guarantor_required": false
+        }
+      },
+      {
+        "scheme": "mudra_kishore", 
+        "max_loan_amount": 500000,
+        "eligibility": {
+          "loan_type": ["business", "msme"],
+          "business_vintage_months": 6
+        }
+      },
+      {
+        "scheme": "pmay_urban_clss",
+        "max_loan_amount": 1200000,
+        "eligibility": {
+          "loan_type": "home",
+          "annual_income": 600000,
+          "first_time_home_buyer": true
+        }
+      }
+    ]
+  },
+  "constitutional_compliance_framework": {
+    "article_14_equality": {
+      "non_discrimination_attributes": ["gender", "religion", "caste", "place_of_birth", "region"],
+      "fairness_metrics": ["disparate_impact", "equalized_odds", "demographic_parity"],
+      "bias_thresholds": {
+        "disparate_impact_ratio": [0.8, 1.25],
+        "statistical_parity_difference": 0.1
+      }
+    },
+    "article_21_life_dignity": {
+      "essential_credit_access": ["housing", "education", "healthcare", "livelihood"],
+      "scheme_alternatives": "mandatory_for_rejections"
+    },
+    "article_46_weaker_sections": {
+      "protected_groups": ["sc", "st", "obc", "women", "transgender", "disabled"],
+      "special_provisions": ["relaxed_criteria", "concessional_rates", "priority_processing"]
+    }
+  },
+  "detailed_rules": [
+    {
+      "id": "thin_file_alternative_scoring",
+      "category": "credit_scoring",
+      "description": "Alternative scoring for thin-file borrowers without credit history (RBI Fair Lending Guidelines)",
+      "severity": "soft",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Fair Practices Code - Non-discrimination for thin-file borrowers",
+      "conditions": [
+        {
+          "field": "credit_history_months",
+          "operator": "lt",
+          "value": 12
+        },
+        {
+          "field": "bank_account_vintage_months",
+          "operator": "gte", 
+          "value": 6
+        },
+        {
+          "field": "employment_stability_months",
+          "operator": "gte",
+          "value": 12
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "use_alternative_scoring_model"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Thin-file borrower - use banking behavior and employment stability"
+        }
+      ]
+    },
+    {
+      "id": "interest_rate_affordability_check",
+      "category": "interest_affordability",
+      "description": "Interest rate affordability relative to borrower income (RBI Digital Lending Guidelines)",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Digital Lending Guidelines 2025 - APR Calculation & Affordability",
+      "conditions": [
+        {
+          "field": "monthly_emi",
+          "operator": "lte",
+          "value": "monthly_income * 0.50",
+          "description": "EMI should not exceed 50% of monthly income"
+        },
+        {
+          "field": "interest_rate_annual",
+          "operator": "lte",
+          "value": 36,
+          "description": "Interest rate cap as per digital lending guidelines"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_affordability"
+        },
+        {
+          "type": "reject",
+          "reason": "EMI exceeds affordability threshold or interest rate too high"
+        }
+      ]
+    },
+    {
+      "id": "kyc_document_verification_urban",
+      "category": "kyc_documentation",
+      "description": "KYC document requirements for urban borrowers (RBI KYC Master Direction)",
+      "severity": "hard", 
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Master Direction on KYC (RBI/DBR/2015-16/18) Updated Aug 2025",
+      "conditions": [
+        {
+          "field": "location_type",
+          "operator": "eq",
+          "value": "urban"
+        },
+        {
+          "field": "loan_amount",
+          "operator": "gte",
+          "value": 50000
+        }
+      ],
+      "required_documents": [
+        {
+          "type": "identity_proof",
+          "valid_docs": ["aadhaar", "pan", "voter_id", "passport", "driving_license"]
+        },
+        {
+          "type": "address_proof", 
+          "valid_docs": ["aadhaar", "utility_bill", "bank_statement", "rental_agreement"]
+        },
+        {
+          "type": "income_proof",
+          "valid_docs": ["salary_slip", "itr", "form16", "bank_statement_salary"]
+        }
+      ],
+      "actions": [
+        {
+          "type": "verify_documents",
+          "value": "mandatory_kyc_check"
+        },
+        {
+          "type": "reject_if_incomplete",
+          "reason": "Mandatory KYC documents missing"
+        }
+      ]
+    },
+    {
+      "id": "kyc_document_relaxation_rural",
+      "category": "kyc_documentation",
+      "description": "Relaxed KYC requirements for rural/agriculture borrowers (RBI PSL Guidelines)",
+      "severity": "soft",
+      "loan_types": ["agriculture", "kisan_credit", "microfinance"],
+      "regulatory_source": "RBI PSL Master Directions 2025 - Rural Documentation Relaxation",
+      "conditions": [
+        {
+          "field": "location_type",
+          "operator": "eq",
+          "value": "rural"
+        },
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 300000
+        }
+      ],
+      "required_documents": [
+        {
+          "type": "identity_proof",
+          "valid_docs": ["aadhaar", "voter_id", "ration_card", "mgnrega_card"]
+        },
+        {
+          "type": "agriculture_proof",
+          "valid_docs": ["land_records", "kisan_passbook", "crop_survey_records", "village_officer_certificate"]
+        }
+      ],
+      "actions": [
+        {
+          "type": "verify_documents",
+          "value": "rural_relaxed_kyc"
+        },
+        {
+          "type": "accept_alternative_docs",
+          "reason": "Rural borrower - accept village-level documentation"
+        }
+      ]
+    },
+    {
+      "id": "loan_tenure_limits_home",
+      "category": "loan_tenure", 
+      "description": "Maximum loan tenure limits for home loans",
+      "severity": "hard",
+      "loan_types": ["home", "housing"],
+      "regulatory_source": "RBI Housing Finance Guidelines & PSL Master Directions",
+      "conditions": [
+        {
+          "field": "borrower_age_at_maturity",
+          "operator": "lte",
+          "value": 70,
+          "description": "Borrower age at loan maturity cannot exceed 70 years"
+        },
+        {
+          "field": "loan_tenure_years",
+          "operator": "lte", 
+          "value": 30,
+          "description": "Maximum home loan tenure 30 years"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_tenure_eligibility"
+        },
+        {
+          "type": "adjust_tenure",
+          "reason": "Reduce tenure to meet age/tenure limits"
+        }
+      ]
+    },
+    {
+      "id": "loan_tenure_limits_personal",
+      "category": "loan_tenure",
+      "description": "Maximum loan tenure limits for personal loans",
+      "severity": "hard",
+      "loan_types": ["personal"],
+      "regulatory_source": "RBI Digital Lending Guidelines",
+      "conditions": [
+        {
+          "field": "loan_tenure_years",
+          "operator": "lte",
+          "value": 5,
+          "description": "Maximum personal loan tenure 5 years"
+        },
+        {
+          "field": "borrower_age_at_maturity", 
+          "operator": "lte",
+          "value": 65
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_personal_loan_tenure"
+        }
+      ]
+    },
+    {
+      "id": "cross_loan_exposure_check",
+      "category": "cross_exposure",
+      "description": "Multiple active loans exposure check",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Prudential Norms & CIBIL Reporting Guidelines",
+      "conditions": [
+        {
+          "field": "active_loans_count",
+          "operator": "gte",
+          "value": 3
+        },
+        {
+          "field": "total_emi_obligation",
+          "operator": "gte",
+          "value": "monthly_income * 0.60",
+          "description": "Total EMI burden exceeds 60% of income"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "high_cross_exposure_risk"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Multiple active loans - high cross-exposure risk"
+        }
+      ]
+    },
+    {
+      "id": "bureau_default_history_check",
+      "category": "credit_scoring",
+      "description": "Credit bureau default and settlement history",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "Credit Information Companies Regulation Act 2005",
+      "conditions": [
+        {
+          "field": "cibil_days_past_due_max",
+          "operator": "gte",
+          "value": 90,
+          "time_period": "last_24_months"
+        },
+        {
+          "field": "settlement_accounts",
+          "operator": "gt",
+          "value": 0,
+          "time_period": "last_36_months"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "high_default_risk"
+        },
+        {
+          "type": "reject",
+          "reason": "Recent defaults or settlements in credit history"
+        }
+      ]
+    },
+    {
+      "id": "aml_suspicious_transaction_pattern",
+      "category": "fraud_aml",
+      "description": "Anti-Money Laundering suspicious transaction patterns",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI AML Guidelines & PMLA Act 2002",
+      "conditions": [
+        {
+          "field": "cash_deposits_last_6_months",
+          "operator": "gte",
+          "value": "loan_amount * 2",
+          "description": "Unusually high cash deposits relative to loan amount"
+        },
+        {
+          "field": "round_amount_transactions",
+          "operator": "gte",
+          "value": 10,
+          "time_period": "last_3_months",
+          "description": "Too many round amount transactions"
+        }
+      ],
+      "actions": [
+        {
+          "type": "flag_for_aml_review", 
+          "value": "suspicious_transaction_pattern"
+        },
+        {
+          "type": "hold_application",
+          "reason": "AML compliance review required"
+        }
+      ]
+    },
+    {
+      "id": "fraud_synthetic_identity_detection",
+      "category": "fraud_aml",
+      "description": "Synthetic identity fraud detection patterns",
+      "severity": "hard", 
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Fraud Risk Management Guidelines",
+      "conditions": [
+        {
+          "field": "aadhaar_pan_name_mismatch",
+          "operator": "eq",
+          "value": true
+        },
+        {
+          "field": "credit_history_age_mismatch",
+          "operator": "eq",
+          "value": true,
+          "description": "Credit history older than likely age at first credit"
+        },
+        {
+          "field": "address_verification_failed",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "actions": [
+        {
+          "type": "flag_for_fraud_review",
+          "value": "potential_synthetic_identity"
+        },
+        {
+          "type": "reject",
+          "reason": "Identity verification failed - potential synthetic identity"
+        }
+      ]
+    },
+    {
+      "id": "dynamic_psl_target_monitoring",
+      "category": "dynamic_monitoring",
+      "description": "Real-time PSL target achievement monitoring",
+      "severity": "soft",
+      "loan_types": ["agriculture", "msme", "housing", "education", "microfinance"],
+      "regulatory_source": "RBI PSL Master Directions 2025 - Target Monitoring",
+      "conditions": [
+        {
+          "field": "current_psl_achievement_percent",
+          "operator": "lt",
+          "value": 40,
+          "description": "PSL achievement below 40% of annual target"
+        },
+        {
+          "field": "quarter_progress",
+          "operator": "gte",
+          "value": 2,
+          "description": "Already in Q2 or later"
+        }
+      ],
+      "actions": [
+        {
+          "type": "prioritize_psl_loans",
+          "value": "boost_psl_achievement"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "PSL target lagging - prioritize eligible applications"
+        }
+      ]
+    },
+    {
+      "id": "weaker_section_priority_processing",
+      "category": "dynamic_monitoring", 
+      "description": "Priority processing for weaker sections (12% PSL target)",
+      "severity": "soft",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI PSL Master Directions 2025 - Weaker Sections Target 12%",
+      "conditions": [
+        {
+          "field": "weaker_section_eligible",
+          "operator": "eq",
+          "value": true
+        },
+        {
+          "field": "weaker_section_psl_achievement",
+          "operator": "lt",
+          "value": 12
+        }
+      ],
+      "actions": [
+        {
+          "type": "fast_track_processing",
+          "value": "weaker_section_priority"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Weaker section borrower - prioritize to meet 12% target"
+        }
+      ]
+    },
+    {
+      "id": "appeals_workflow_psl_eligible_rejection",
+      "category": "appeals_workflow",
+      "description": "Appeals process for PSL-eligible loan rejections",
+      "severity": "soft",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI Fair Practices Code & Constitutional Article 14",
+      "conditions": [
+        {
+          "field": "psl_eligible",
+          "operator": "eq",
+          "value": true
+        },
+        {
+          "field": "model_decision",
+          "operator": "eq",
+          "value": "reject"
+        },
+        {
+          "field": "model_probability",
+          "operator": "gte",
+          "value": 0.35,
+          "description": "Close to approval threshold"
+        }
+      ],
+      "actions": [
+        {
+          "type": "route_to_appeals",
+          "value": "psl_eligible_appeal_review"
+        },
+        {
+          "type": "generate_legal_challenge_pack",
+          "reason": "PSL-eligible rejection - provide legal recourse options"
+        }
+      ]
+    },
+    {
+      "id": "constitutional_non_discrimination_check", 
+      "category": "constitutional_compliance",
+      "description": "Article 14 non-discrimination compliance check",
+      "severity": "hard",
+      "loan_types": ["all"],
+      "regulatory_source": "Constitution of India Article 14 - Right to Equality",
+      "conditions": [
+        {
+          "field": "rejection_reason",
+          "operator": "contains_discriminatory_factor",
+          "protected_attributes": ["gender", "caste", "religion", "region", "disability_status"]
+        }
+      ],
+      "actions": [
+        {
+          "type": "flag_bias_alert",
+          "value": "potential_discrimination_detected"
+        },
+        {
+          "type": "route_to_human_review", 
+          "reason": "Potential discrimination - manual fairness review required"
+        }
+      ]
+    },
+    {
+      "id": "psl_agriculture_individual_farmer_limit",
+      "category": "psl_compliance",
+      "description": "RBI PSL Agriculture - Individual farmers loan limit compliance (Para 9.1.A)",
+      "severity": "hard",
+      "loan_types": ["agriculture", "kisan_credit"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 9.1",
+      "conditions": [
+        {
+          "field": "borrower_type",
+          "operator": "eq",
+          "value": "individual_farmer"
+        },
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 9000000,
+          "description": "Agricultural loans against warehouse receipts up to ₹90 lakh for NWRs/eNWRs"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_psl_eligibility"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "PSL agriculture loan - verify individual farmer status and land holdings"
+        }
+      ]
+    },
+    {
+      "id": "psl_corporate_farmer_4cr_limit",
+      "category": "psl_compliance",
+      "description": "RBI PSL Agriculture - Corporate farmers/FPOs aggregate limit ₹4 crore (Para 9.1.B)",
+      "severity": "hard",
+      "loan_types": ["agriculture"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 9.1.B(a)",
+      "conditions": [
+        {
+          "field": "borrower_type",
+          "operator": "in",
+          "value": ["corporate_farmer", "fpo", "fpc", "partnership_firm", "cooperative"]
+        },
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 40000000,
+          "description": "Aggregate limit ₹4 crore per borrowing entity for corporate farmers"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_aggregate_exposure"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Verify aggregate exposure across banking system for corporate farmer"
+        }
+      ]
+    },
+    {
+      "id": "msme_definition_compliance",
+      "category": "psl_compliance",
+      "description": "RBI MSME Definition compliance as per Master Direction (Para 10.i)",
+      "severity": "hard",
+      "loan_types": ["msme", "business"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 10.i / FIDD.MSME & NFS.12/06.02.31/2017-18",
+      "conditions": [
+        {
+          "field": "msme_certificate",
+          "operator": "eq",
+          "value": true,
+          "description": "Must have valid MSME certificate"
+        },
+        {
+          "field": "investment_in_plant_machinery",
+          "operator": "lte",
+          "value": 100000000,
+          "description": "As per MSME Act definition - varies by micro/small/medium"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "verify_msme_status"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Verify MSME certificate validity and classification"
+        }
+      ]
+    },
+    {
+      "id": "education_loan_25_lakh_limit",
+      "category": "psl_compliance",
+      "description": "RBI PSL Education loans up to ₹25 lakh (Para 12)",
+      "severity": "hard",
+      "loan_types": ["education"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 12",
+      "conditions": [
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 2500000
+        },
+        {
+          "field": "course_type",
+          "operator": "in",
+          "value": ["educational", "vocational"]
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "psl_eligible"
+        }
+      ]
+    },
+    {
+      "id": "housing_loan_psl_limits_metropolitan",
+      "category": "psl_compliance",
+      "description": "RBI PSL Housing loan limits for metropolitan cities (Para 13.1.i)",
+      "severity": "hard",
+      "loan_types": ["home", "housing"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 13.1.i",
+      "conditions": [
+        {
+          "field": "city_population",
+          "operator": "gte",
+          "value": 5000000,
+          "description": "Centres with population 50 lakh and above"
+        },
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 5000000,
+          "description": "Loan limit ₹50 lakh"
+        },
+        {
+          "field": "dwelling_cost",
+          "operator": "lte",
+          "value": 6300000,
+          "description": "Maximum dwelling cost ₹63 lakh"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "psl_eligible"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "PSL housing loan in metropolitan city - verify both loan and cost limits"
+        }
+      ]
+    },
+    {
+      "id": "housing_loan_psl_limits_tier1",
+      "category": "psl_compliance",
+      "description": "RBI PSL Housing loan limits for Tier-1 cities (Para 13.1.i)",
+      "severity": "hard",
+      "loan_types": ["home", "housing"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 13.1.i",
+      "conditions": [
+        {
+          "field": "city_population",
+          "operator": "gte",
+          "value": 1000000
+        },
+        {
+          "field": "city_population",
+          "operator": "lt",
+          "value": 5000000
+        },
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 4500000,
+          "description": "Loan limit ₹45 lakh"
+        },
+        {
+          "field": "dwelling_cost",
+          "operator": "lte",
+          "value": 5700000,
+          "description": "Maximum dwelling cost ₹57 lakh"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "psl_eligible"
+        }
+      ]
+    },
+    {
+      "id": "housing_loan_psl_limits_smaller_cities", 
+      "category": "psl_compliance",
+      "description": "RBI PSL Housing loan limits for smaller cities (Para 13.1.i)",
+      "severity": "hard",
+      "loan_types": ["home", "housing"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 13.1.i",
+      "conditions": [
+        {
+          "field": "city_population",
+          "operator": "lt",
+          "value": 1000000
+        },
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 3500000,
+          "description": "Loan limit ₹35 lakh"
+        },
+        {
+          "field": "dwelling_cost",
+          "operator": "lte",
+          "value": 4400000,
+          "description": "Maximum dwelling cost ₹44 lakh"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "psl_eligible"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "PSL affordable housing - prioritize for smaller cities"
+        }
+      ]
+    },
+    {
+      "id": "microfinance_individual_lending",
+      "category": "psl_compliance",
+      "description": "RBI PSL Microfinance individual lending compliance (Para 16.i)",
+      "severity": "soft",
+      "loan_types": ["microfinance"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 16.i / Master Direction March 14, 2022",
+      "conditions": [
+        {
+          "field": "borrower_type",
+          "operator": "in",
+          "value": ["individual", "shg_member", "jlg_member"]
+        },
+        {
+          "field": "annual_household_income",
+          "operator": "lte",
+          "value": 300000,
+          "description": "As per Microfinance Master Direction 2022"
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "psl_eligible"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Verify microfinance borrower income eligibility"
+        }
+      ]
+    },
+    {
+      "id": "weaker_sections_women_2lakh",
+      "category": "psl_compliance",
+      "description": "RBI PSL Weaker Sections - Individual women up to ₹2 lakh (Para 17.1.viii)",
+      "severity": "soft",
+      "loan_types": ["all"],
+      "regulatory_source": "RBI PSL Master Directions 2025, Para 17.1.viii",
+      "conditions": [
+        {
+          "field": "gender",
+          "operator": "eq",
+          "value": "female"
+        },
+        {
+          "field": "loan_amount",
+          "operator": "lte",
+          "value": 200000
+        }
+      ],
+      "actions": [
+        {
+          "type": "decision",
+          "value": "check_credit_score_eligibility"
+        },
+        {
+          "type": "flag_for_manual_review",
+          "reason": "Credit score below minimum threshold - consider alternative assessment"
+        }
+      ]
+    }
+  ]
+}

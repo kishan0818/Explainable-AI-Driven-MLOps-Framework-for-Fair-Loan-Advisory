@@ -1,0 +1,11 @@
+myvenv/
+model_results/
+__pycache__/
+
+model_rules_integ.py
+
+rules_engine.py
+rule_engine_op.log
+
+
+train_synth_gpu.py

@@ -1,0 +1,36 @@
+{
+  "accuracy": 0.8079890346583121,
+  "precision": 0.7624951941560938,
+  "recall": 0.7653642064640618,
+  "f1": 0.7639270065963696,
+  "roc_auc": 0.8789811084601244,
+  "oob_score": 0.8314806727259243,
+  "training_time": "0:00:06.282851",
+  "target_performance": 0.85,
+  "preprocessing_techniques": [
+    "Included additional market and economic risk indicators",
+    "Feature selection: kept ['Age', 'Income', 'LoanAmount', 'MonthsEmployed', 'NumCreditLines', 'InterestRate', 'DTIRatio', 'EmploymentType', 'HasMortgage', 'HasDependents', 'HasCoSigner'], dropped ['LoanTerm', 'Education', 'MaritalStatus', 'LoanPurpose', 'MarketVolatilityIndex', 'EconomicUncertaintyScore']"
+  ],
+  "model_params": {
+    "bootstrap": true,
+    "ccp_alpha": 0.0,
+    "class_weight": null,
+    "criterion": "gini",
+    "max_depth": 8,
+    "max_features": "sqrt",
+    "max_leaf_nodes": null,
+    "max_samples": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 4,
+    "min_samples_split": 10,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "n_estimators": 80,
+    "n_jobs": -1,
+    "oob_score": true,
+    "random_state": 42,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "feature_count": 11
+}

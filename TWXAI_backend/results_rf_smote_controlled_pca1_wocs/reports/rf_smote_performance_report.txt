@@ -1,0 +1,81 @@
+================================================================================
+RANDOM FOREST + SMOTE LOAN DEFAULT PREDICTION REPORT
+Generated on: 2025-09-23 19:55:55
+================================================================================
+
+DATASET INFORMATION
+----------------------------------------
+Total samples: 510698
+Features used: 11
+Training samples: 204279
+Test samples: 51070
+Class distribution (original):
+  No Default: 151697 (59.4%)
+  Default: 103652 (40.6%)
+
+MODEL CONFIGURATION
+----------------------------------------
+Algorithm: Random Forest with SMOTE
+Parameters:
+  bootstrap: True
+  ccp_alpha: 0.0
+  class_weight: None
+  criterion: gini
+  max_depth: 8
+  max_features: sqrt
+  max_leaf_nodes: None
+  max_samples: None
+  min_impurity_decrease: 0.0
+  min_samples_leaf: 4
+  min_samples_split: 10
+  min_weight_fraction_leaf: 0.0
+  monotonic_cst: None
+  n_estimators: 80
+  n_jobs: -1
+  oob_score: True
+  random_state: 42
+  verbose: 0
+  warm_start: False
+
+PREPROCESSING TECHNIQUES APPLIED
+----------------------------------------
+1. SMOTE (Synthetic Minority Oversampling Technique)
+   - Applied to balance class distribution
+   - Generates synthetic samples for minority class
+
+2. Included additional market and economic risk indicators
+3. Feature selection: kept ['Age', 'Income', 'LoanAmount', 'MonthsEmployed', 'NumCreditLines', 'InterestRate', 'DTIRatio', 'EmploymentType', 'HasMortgage', 'HasDependents', 'HasCoSigner'], dropped ['LoanTerm', 'Education', 'MaritalStatus', 'LoanPurpose', 'MarketVolatilityIndex', 'EconomicUncertaintyScore']
+
+PERFORMANCE METRICS
+----------------------------------------
+Accuracy:     0.8080
+Precision:    0.7625
+Recall:       0.7654
+F1-Score:     0.7639
+ROC-AUC:      0.8790
+OOB Score:    0.8315
+Training Time: 0:00:06.282851
+
+DETAILED CLASSIFICATION REPORT
+----------------------------------------
+              precision    recall  f1-score   support
+
+  No Default       0.84      0.84      0.84     30340
+     Default       0.76      0.77      0.76     20730
+
+    accuracy                           0.81     51070
+   macro avg       0.80      0.80      0.80     51070
+weighted avg       0.81      0.81      0.81     51070
+
+CONFUSION MATRIX
+----------------------------------------
+                Predicted
+Actual      No Default  Default
+No Default       25398      4942
+Default           4864     15866
+
+PERFORMANCE ANALYSIS & JUSTIFICATION
+----------------------------------------
+Target Performance Threshold: 0.85
+Achieved Performance: 0.8080
+
