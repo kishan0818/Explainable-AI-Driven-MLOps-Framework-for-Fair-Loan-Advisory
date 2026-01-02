@@ -1,0 +1,20 @@
+
+> my-v0-project@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.16
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+Failed to compile.
+
+./components/chatbot.tsx
+Module not found: Can't resolve '@/lib/mockdata'
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./app/user/dashboard/page.tsx
+
+
+> Build failed because of webpack errors

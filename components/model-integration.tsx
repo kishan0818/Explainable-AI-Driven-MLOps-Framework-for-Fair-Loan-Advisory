@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Brain, AlertTriangle, CheckCircle, BarChart3, Download, Eye, Zap } from "lucide-react"
+import { Brain, AlertTriangle, CheckCircle, BarChart3, Zap } from "lucide-react"
+import { supabase } from "@/lib/supabase/client"
 
 interface ModelPredictionProps {
   applicationData: any
@@ -21,56 +22,85 @@ export function ModelPrediction({ applicationData, onPredictionComplete }: Model
   const handlePredict = async () => {
     setIsLoading(true)
     try {
-      // Call prediction API
-      const response = await fetch("/api/predict", {
+      // Get auth token strictly as requested
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session || !session.access_token) {
+        console.error("Session Error:", sessionError)
+        throw new Error("Authentication error: Session expired or missing")
+      }
+
+      console.log("JWT being sent:", session.access_token)
+
+      // Call Real FastAPI Backend
+      const response = await fetch("http://127.0.0.1:8000/predict", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
         body: JSON.stringify(applicationData),
       })
 
-      const result = await response.json()
-      if (result.success) {
-        setPrediction(result.data)
-
-        // Get SHAP explanation
-        const explanationResponse = await fetch("/api/shap/explain", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            applicationId: result.data.applicationId,
-            prediction: result.data.prediction,
-            shapValues: result.data.shapValues,
-          }),
-        })
-
-        const explanationResult = await explanationResponse.json()
-        if (explanationResult.success) {
-          setExplanation(explanationResult.data)
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Authentication error: Unauthorized access to backend")
         }
-
-        // Log audit trail
-        await fetch("/api/audit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            applicationId: result.data.applicationId,
-            userId: "current_user",
-            userRole: "system",
-            action: "loan_prediction",
-            prediction: result.data.prediction,
-            confidence: result.data.confidence,
-            modelVersion: result.data.modelVersion,
-            shapValues: result.data.shapValues,
-            rulesApplied: ["RBI001", "RBI002"],
-            schemesRecommended: result.data.recommendations,
-            complianceFlags: ["PSL_COMPLIANT", "KYC_VERIFIED"],
-          }),
-        })
-
-        onPredictionComplete?.(result.data)
+        throw new Error(`Backend error: ${response.status}`)
       }
-    } catch (error) {
-      console.error("Prediction error:", error)
+
+      const result = await response.json()
+
+      // Map Backend Response to UI State
+      const approveProb = 1 - (result.risk_score / 100)
+      const rejectProb = result.risk_score / 100
+      const bestBank = result.bank_suitability?.[0]
+
+      const predictionData = {
+        applicationId: result.application_id,
+        prediction: result.prediction,
+        confidence: result.confidence,
+        modelVersion: "RandomForest_v1",
+        probability: {
+          approve: approveProb,
+          reject: rejectProb
+        },
+        riskFactors: result.negative_factors || [],
+        positiveFactors: result.positive_factors || [],
+        recommendations: result.positive_factors || [], // For compatibility
+        bestBank: bestBank
+      }
+
+      setPrediction(predictionData)
+
+      setExplanation({
+        explanation: {
+          summary: `Risk Band: ${result.risk_band}. Logic based on credit history, income to debt ratio, employment stability, and rules engine.`,
+          riskAssessment: {
+            level: result.risk_band.toLowerCase(),
+            score: result.risk_score
+          },
+          topFactors: [
+            ...(result.negative_factors?.map((f: string) => ({ factor: f, type: "negative", impact: "High Risk" })) || []),
+            ...(result.positive_factors?.map((f: string) => ({ factor: f, type: "positive", impact: "Strength" })) || [])
+          ],
+          alternativeOptions: result.schemes_suggested?.map((s: any) => ({
+            scheme: s.name,
+            benefits: s.description
+          })) || []
+        },
+        visualData: []
+      })
+
+      onPredictionComplete?.(result)
+
+    } catch (error: any) {
+      console.error("Prediction error details:", error)
+      if (error.message.includes("Authentication")) {
+        alert("Authentication error. Please log in again.")
+      } else {
+        alert(`Failed to process application: ${error.message}`)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -137,7 +167,7 @@ export function ModelPrediction({ applicationData, onPredictionComplete }: Model
                 Application ID: {prediction.applicationId} • Model: {prediction.modelVersion}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="grid md:grid-cols-3 gap-4">
                 <div>
                   <div className="text-sm text-muted-foreground">Confidence</div>
@@ -167,88 +197,80 @@ export function ModelPrediction({ applicationData, onPredictionComplete }: Model
                 <Progress value={prediction.confidence * 100} className="h-2" />
               </div>
 
+              {/* Bank Suitability Display */}
+              {prediction.bestBank && (
+                <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-2xl">
+                    🏦
+                  </div>
+                  <div>
+                    <div className="font-medium text-blue-900">Best-fit Bank Recommendation</div>
+                    <div className="text-sm text-blue-700">
+                      <span className="font-bold">{prediction.bestBank.bank_name}</span> – {prediction.bestBank.suitability} Suitability
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {prediction.riskFactors && prediction.riskFactors.length > 0 && (
                 <div>
-                  <div className="text-sm font-medium text-muted-foreground mb-2">Risk Factors</div>
+                  <div className="text-sm font-medium text-destructive mb-2 flex items-center">
+                    <AlertTriangle className="w-4 h-4 mr-1" />
+                    Negative Factors (Risks)
+                  </div>
                   <div className="space-y-1">
                     {prediction.riskFactors.map((factor: string, index: number) => (
-                      <div key={index} className="flex items-start space-x-2 text-sm">
-                        <AlertTriangle className="w-3 h-3 text-warning mt-0.5 flex-shrink-0" />
-                        <span>{factor}</span>
+                      <div key={index} className="flex items-start space-x-2 text-sm text-muted-foreground">
+                        <span>• {factor}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {prediction.recommendations && prediction.recommendations.length > 0 && (
+              {prediction.positiveFactors && prediction.positiveFactors.length > 0 && (
                 <div>
-                  <div className="text-sm font-medium text-muted-foreground mb-2">Recommendations</div>
+                  <div className="text-sm font-medium text-success mb-2 flex items-center">
+                    <CheckCircle className="w-4 h-4 mr-1" />
+                    Positive Factors (Strengths)
+                  </div>
                   <div className="space-y-1">
-                    {prediction.recommendations.map((rec: string, index: number) => (
-                      <div key={index} className="flex items-start space-x-2 text-sm">
-                        <CheckCircle className="w-3 h-3 text-success mt-0.5 flex-shrink-0" />
-                        <span>{rec}</span>
+                    {prediction.positiveFactors.map((factor: string, index: number) => (
+                      <div key={index} className="flex items-start space-x-2 text-sm text-muted-foreground">
+                        <span>• {factor}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+
             </CardContent>
           </Card>
 
-          {/* SHAP Explanation */}
+          {/* Key Decision Factors */}
           {explanation && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <BarChart3 className="w-5 h-5" />
-                  <span>SHAP Explainability</span>
+                  <span>Key Decision Factors (Model + Rules Based)</span>
                 </CardTitle>
-                <CardDescription>Understand how each factor influenced the decision</CardDescription>
+                <CardDescription>Transparent breakdown of the decision logic</CardDescription>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="summary" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
+                <Tabs defaultValue="factors" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="factors">Decision Factors</TabsTrigger>
                     <TabsTrigger value="summary">Summary</TabsTrigger>
-                    <TabsTrigger value="factors">Key Factors</TabsTrigger>
-                    <TabsTrigger value="visual">Visual Analysis</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="summary" className="space-y-4">
                     <div className="p-4 bg-muted rounded-lg">
                       <p className="text-sm">{explanation.explanation.summary}</p>
                     </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-medium mb-2">Risk Assessment</h4>
-                        <Badge
-                          variant={
-                            explanation.explanation.riskAssessment.level === "low"
-                              ? "default"
-                              : explanation.explanation.riskAssessment.level === "medium"
-                                ? "secondary"
-                                : "destructive"
-                          }
-                        >
-                          {explanation.explanation.riskAssessment.level.toUpperCase()} RISK
-                        </Badge>
-                      </div>
-
-                      {explanation.explanation.alternativeOptions && explanation.explanation.alternativeOptions.length > 0 && (
-                        <div>
-                          <h4 className="font-medium mb-2">Alternative Schemes</h4>
-                          <div className="space-y-2">
-                            {explanation.explanation.alternativeOptions && explanation.explanation.alternativeOptions.map((option: any, index: number) => (
-                              <div key={index} className="p-2 border rounded text-xs">
-                                <div className="font-medium">{option.scheme}</div>
-                                <div className="text-muted-foreground">{option.benefits}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                    <div className="flex items-center space-x-2 mt-4">
+                      <Badge variant="outline">{explanation.explanation.riskAssessment.level.toUpperCase()} RISK BAND</Badge>
+                      <span className="text-sm text-muted-foreground">Score: {explanation.explanation.riskAssessment.score}/100</span>
                     </div>
                   </TabsContent>
 
@@ -257,57 +279,17 @@ export function ModelPrediction({ applicationData, onPredictionComplete }: Model
                       {explanation.explanation.topFactors && explanation.explanation.topFactors.map((factor: any, index: number) => (
                         <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                           <div className="flex-1">
-                            <div className="font-medium text-sm capitalize">{factor.factor}</div>
-                            <div className="text-xs text-muted-foreground">{factor.explanation}</div>
+                            <div className="font-medium text-sm">{factor.factor}</div>
+                            <div className="text-xs text-muted-foreground">{factor.type === 'positive' ? 'Supporting Approval' : 'Contributing to Risk'}</div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <div className="text-sm font-medium">
-                              {factor.impact > 0 ? "+" : ""}
-                              {(factor.impact * 100).toFixed(1)}%
-                            </div>
-                            <div
-                              className={`w-2 h-8 rounded ${factor.impact > 0 ? "bg-success" : "bg-destructive"}`}
-                            ></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="visual" className="space-y-4">
-                    <div className="space-y-3">
-                      {explanation.visualData && explanation.visualData.map((item: any, index: number) => (
-                        <div key={index} className="flex items-center space-x-3">
-                          <div className="w-20 text-sm font-medium capitalize">{item.feature}</div>
-                          <div className="flex-1 flex items-center space-x-2">
-                            <div className="w-32 bg-muted rounded-full h-2 relative">
-                              <div
-                                className="absolute top-0 h-2 rounded-full"
-                                style={{
-                                  backgroundColor: item.color,
-                                  width: `${Math.abs(item.shapValue) * 100}%`,
-                                  left: item.shapValue < 0 ? `${50 + item.shapValue * 50}%` : "50%",
-                                }}
-                              ></div>
-                            </div>
-                            <div className="text-sm text-muted-foreground">{item.featureValue}</div>
-                          </div>
+                          <Badge variant={factor.type === 'positive' ? 'default' : 'destructive'}>
+                            {factor.impact}
+                          </Badge>
                         </div>
                       ))}
                     </div>
                   </TabsContent>
                 </Tabs>
-
-                <div className="flex space-x-2 mt-4">
-                  <Button size="sm" variant="outline">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Report
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Audit Trail
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           )}

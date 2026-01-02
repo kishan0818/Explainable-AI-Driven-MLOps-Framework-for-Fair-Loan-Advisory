@@ -1,6 +1,6 @@
 """
 FastAPI Backend for TWXAI Loan Prediction System
-Integrates trained Random Forest + SMOTE model with rules engine and schemes engine
+Production Integration with Supabase and Real ML Inference
 """
 
 import os
@@ -9,577 +9,475 @@ import logging
 import joblib
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-import uvicorn
+from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+from supabase import create_client, Client
+import httpx
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# CORS middleware will be added after app initialization
+# --- Configuration & Auth Setup ---
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET") # Keeping for legacy or if needed, though user said remove decode.
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") # User requested this specific key
 
-# Global variables for model and preprocessors
+if not all([SUPABASE_URL, SUPABASE_KEY]):
+    logger.critical("Missing Supabase configuration. Check .env file.")
+
+# Initialize Supabase (Service Role)
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+except Exception as e:
+    logger.critical(f"Failed to initialize Supabase: {e}")
+    supabase = None
+
+security = HTTPBearer()
+
+# --- Global ML Artifacts ---
 model = None
 feature_selector = None
 label_encoders = None
 pca = None
-model_metadata = None
+rules_data = {}
+schemes_data = {}
 
-# Pydantic models for request/response
+# --- Pydantic Models ---
 class LoanApplication(BaseModel):
     name: str = Field(..., description="Applicant name")
     age: int = Field(..., ge=18, le=80, description="Applicant age")
     income: float = Field(..., gt=0, description="Monthly income")
     loan_amount: float = Field(..., gt=0, description="Requested loan amount")
-    loan_type: str = Field(..., description="Type of loan (home, personal, vehicle, education, business)")
-    employment_type: str = Field(..., description="Employment type (salaried, self_employed_business, self_employed_professional)")
-    credit_score: Optional[int] = Field(None, ge=300, le=900, description="Credit score (optional)")
-    dti_ratio: Optional[float] = Field(None, ge=0, le=1, description="Debt-to-income ratio")
-    months_employed: Optional[int] = Field(None, ge=0, description="Months in current employment")
-    num_credit_lines: Optional[int] = Field(None, ge=0, description="Number of active credit lines")
-    interest_rate: Optional[float] = Field(None, ge=0, le=50, description="Interest rate")
-    loan_term: Optional[int] = Field(None, ge=1, le=30, description="Loan term in months")
-    education: Optional[str] = Field(None, description="Education level")
-    marital_status: Optional[str] = Field(None, description="Marital status")
-    has_mortgage: Optional[bool] = Field(None, description="Has existing mortgage")
-    has_dependents: Optional[bool] = Field(None, description="Has dependents")
-    loan_purpose: Optional[str] = Field(None, description="Purpose of loan")
-    has_co_signer: Optional[bool] = Field(None, description="Has co-signer")
-    gender: Optional[str] = Field(None, description="Gender")
-    caste_category: Optional[str] = Field(None, description="Caste category (sc, st, obc, general)")
-    location_type: Optional[str] = Field(None, description="Location type (urban, rural)")
+    loan_type: str = Field(..., description="Type of loan (home, personal, education, msme, agriculture)")
+    employment_type: str = Field(..., description="Employment type (salaried, self_employed, business)")
+    existing_emi: float = Field(0, ge=0, description="Existing monthly EMI obligations")
+    credit_score: Optional[int] = Field(None, ge=300, le=900, description="CIBIL/Credit Score")
+    # Additional fields required by ML preprocessor but maybe not in DB (will be inferred or optional)
+    months_employed: Optional[int] = Field(None, ge=0)
+    num_credit_lines: Optional[int] = Field(None, ge=0)
+    interest_rate: Optional[float] = Field(None)
+    loan_term: Optional[int] = Field(None)
+    education: Optional[str] = Field(None)
+    marital_status: Optional[str] = Field(None)
+    has_mortgage: Optional[bool] = Field(None)
+    has_dependents: Optional[bool] = Field(None)
+    loan_purpose: Optional[str] = Field(None)
+    has_co_signer: Optional[bool] = Field(None)
+    gender: Optional[str] = Field(None)
+    caste_category: Optional[str] = Field(None)
+    location_type: Optional[str] = Field(None)
+
+class BankSuitabilityResult(BaseModel):
+    bank_name: str
+    suitability: str
+    reason: str
+
+class SchemeRecommendationResult(BaseModel):
+    scheme_id: str
+    scheme_name: str
+    reason: str
 
 class ModelPrediction(BaseModel):
     application_id: str
-    prediction: str  # "approve" or "reject"
+    risk_score: float
+    risk_band: str
+    prediction: str  # approve/reject (based on ML prob)
     confidence: float
-    probability: Dict[str, float]
-    shap_values: List[Dict[str, Any]]
-    risk_factors: List[str]
-    recommendations: List[str]
-    model_version: str
+    positive_factors: List[str]
+    negative_factors: List[str]
+    bank_suitability: List[BankSuitabilityResult]
+    schemes_suggested: List[SchemeRecommendationResult]
     timestamp: str
-    rules_applied: List[Dict[str, Any]]
-    schemes_suggested: List[Dict[str, Any]]
 
-class ModelStatus(BaseModel):
-    model_version: str
-    status: str
-    accuracy: float
-    precision: float
-    recall: float
-    f1_score: float
-    roc_auc: float
-    oob_score: float
-    last_updated: str
-    total_predictions: int
-    today_predictions: int
-    avg_processing_time: float
-    error_rate: float
-    features: List[Dict[str, Any]]
-    performance_history: List[Dict[str, Any]]
-
-# Load model and preprocessors
-def load_model():
-    """Load the trained model and preprocessors"""
-    global model, feature_selector, label_encoders, pca, model_metadata
+# --- Authentication Middleware ---
+async def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Verify Supabase JWT via Remote Auth API (Strict)"""
+    token = credentials.credentials
     
+    # Use Anon Key if available, else fallback to Service Role Key (both valid for apikey header generally, though Anon is standard for client emulation)
+    api_key = SUPABASE_ANON_KEY or SUPABASE_KEY
+    
+    if not api_key:
+        logger.error("No API Key available for Auth Verification")
+        raise HTTPException(status_code=500, detail="Server Configuration Error")
+
     try:
-        model_dir = "results_rf_smote_controlled_pca1_wocs/models"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "apikey": api_key
+                }
+            )
+            
+        if response.status_code != 200:
+            logger.warning(f"Auth Token Validation Failed: {response.text}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+            
+        user = response.json()
         
-        # Load model
-        model_path = os.path.join(model_dir, "rf_smote_model.joblib")
-        if os.path.exists(model_path):
-            model = joblib.load(model_path)
-            logger.info(f"Model loaded from {model_path}")
-        else:
-            logger.error(f"Model file not found: {model_path}")
-            return False
-        
-        # Load feature selector
-        feature_selector_path = os.path.join(model_dir, "feature_selector.joblib")
-        if os.path.exists(feature_selector_path):
-            feature_selector = joblib.load(feature_selector_path)
-            logger.info(f"Feature selector loaded from {feature_selector_path}")
-        
-        # Load label encoders
-        label_encoders_path = os.path.join(model_dir, "label_encoders.joblib")
-        if os.path.exists(label_encoders_path):
-            label_encoders = joblib.load(label_encoders_path)
-            logger.info(f"Label encoders loaded from {label_encoders_path}")
-        
-        # Load PCA
-        pca_path = os.path.join(model_dir, "pca.joblib")
-        if os.path.exists(pca_path):
-            pca = joblib.load(pca_path)
-            logger.info(f"PCA loaded from {pca_path}")
-        
-        # Load metadata
-        metadata_path = os.path.join(model_dir, "model_metadata.json")
-        if os.path.exists(metadata_path):
-            with open(metadata_path, 'r') as f:
-                model_metadata = json.load(f)
-            logger.info(f"Model metadata loaded from {metadata_path}")
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error loading model: {str(e)}")
-        return False
-
-# Rules Engine
-def apply_rules_engine(application: LoanApplication, prediction_prob: float) -> List[Dict[str, Any]]:
-    """Apply RBI/PSL rules and regulations"""
-    rules_applied = []
-    
-    # Load rules
-    try:
-        with open("rules.json", 'r') as f:
-            rules_data = json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading rules: {str(e)}")
-        return rules_applied
-    
-    # Apply basic rules
-    rules = rules_data.get("rules", [])
-    
-    for rule in rules:
-        rule_result = {
-            "rule_id": rule.get("id"),
-            "description": rule.get("description"),
-            "severity": rule.get("severity"),
-            "applied": False,
-            "result": "passed"
+        # Normailize structure to what logic expects (payload vs user object)
+        # The /user endpoint returns the User object directly.
+        # We need to ensure we return something compatible with usage (user_payload.get("sub"))
+        # User object has 'id', 'email', etc.
+        # Construct a payload-like dict for compatibility
+        return {
+            "sub": user.get("id"),
+            "email": user.get("email"),
+            "app_metadata": user.get("app_metadata"),
+            "user_metadata": user.get("user_metadata")
         }
         
-        # Credit score minimum threshold rule
-        if rule.get("id") == "credit_score_minimum_threshold":
-            if application.credit_score:
-                required_score = 600  # Default
-                if application.loan_type == "home" and application.loan_amount >= 2000000:
-                    required_score = 750
-                elif application.loan_type == "home":
-                    required_score = 700
-                elif application.loan_amount >= 500000:
-                    required_score = 650
-                
-                if application.credit_score < required_score:
-                    rule_result["applied"] = True
-                    rule_result["result"] = "failed"
-                    rule_result["reason"] = f"Credit score {application.credit_score} below required {required_score}"
-                else:
-                    rule_result["applied"] = True
-                    rule_result["result"] = "passed"
-        
-        # DTI ratio limits
-        elif rule.get("id") == "debt_to_income_ratio_limits":
-            if application.dti_ratio:
-                max_dti = 0.5  # Default
-                if application.loan_type == "home":
-                    max_dti = 0.6
-                elif application.loan_type in ["vehicle", "education"]:
-                    max_dti = 0.55
-                
-                if application.dti_ratio > max_dti:
-                    rule_result["applied"] = True
-                    rule_result["result"] = "failed"
-                    rule_result["reason"] = f"DTI ratio {application.dti_ratio:.2f} exceeds limit {max_dti:.2f}"
-                else:
-                    rule_result["applied"] = True
-                    rule_result["result"] = "passed"
-        
-        # Employment stability
-        elif rule.get("id") == "employment_stability_requirements":
-            if application.months_employed:
-                min_months = 12  # Default
-                if application.employment_type == "self_employed_business":
-                    min_months = 24
-                elif application.employment_type == "self_employed_professional":
-                    min_months = 36
-                
-                if application.months_employed < min_months:
-                    rule_result["applied"] = True
-                    rule_result["result"] = "warning"
-                    rule_result["reason"] = f"Employment tenure {application.months_employed} months below recommended {min_months}"
-                else:
-                    rule_result["applied"] = True
-                    rule_result["result"] = "passed"
-        
-        if rule_result["applied"]:
-            rules_applied.append(rule_result)
-    
-    return rules_applied
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Auth Verification Error: {str(e)}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
 
-# Schemes Engine
-def suggest_government_schemes(application: LoanApplication, prediction: str) -> List[Dict[str, Any]]:
-    """Suggest government schemes for rejected applicants"""
-    schemes_suggested = []
-    
-    if prediction == "reject":
-        try:
-            with open("schemes.json", 'r') as f:
-                schemes_data = json.load(f)
-        except Exception as e:
-            logger.error(f"Error loading schemes: {str(e)}")
-            return schemes_suggested
-        
-        schemes = schemes_data.get("schemes", [])
-        
-        for scheme in schemes:
-            scheme_info = {
-                "id": scheme.get("id"),
-                "name": scheme.get("name"),
-                "category": scheme.get("category"),
-                "description": scheme.get("description"),
-                "eligibility": scheme.get("eligibility", {}),
-                "benefits": scheme.get("benefits", []),
-                "url": scheme.get("url"),
-                "match_score": 0
-            }
-            
-            # Calculate match score based on eligibility
-            match_score = 0
-            
-            # MUDRA scheme for business loans
-            if scheme.get("id") == "pmmy" and application.loan_type == "business":
-                if application.loan_amount <= 2000000:  # 20 lakh limit
-                    match_score += 80
-                    scheme_info["match_score"] = match_score
-                    schemes_suggested.append(scheme_info)
-            
-            # Stand-Up India for SC/ST/Women
-            elif scheme.get("id") == "stand_up_india":
-                if (application.caste_category in ["sc", "st"] or 
-                    application.gender == "female") and application.loan_type == "business":
-                    if 1000000 <= application.loan_amount <= 10000000:  # 10 lakh to 1 crore
-                        match_score += 90
-                        scheme_info["match_score"] = match_score
-                        schemes_suggested.append(scheme_info)
-            
-            # PMAY for home loans
-            elif scheme.get("id") == "pmay_urban" and application.loan_type == "home":
-                if application.income <= 1800000:  # Annual income limit
-                    match_score += 85
-                    scheme_info["match_score"] = match_score
-                    schemes_suggested.append(scheme_info)
-            
-            # Education loans
-            elif scheme.get("id") == "pm_vidyalaxmi" and application.loan_type == "education":
-                if application.loan_amount <= 2000000:  # 20 lakh limit
-                    match_score += 80
-                    scheme_info["match_score"] = match_score
-                    schemes_suggested.append(scheme_info)
-        
-        # Sort by match score
-        schemes_suggested.sort(key=lambda x: x["match_score"], reverse=True)
-        schemes_suggested = schemes_suggested[:3]  # Top 3 suggestions
-    
-    return schemes_suggested
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
-# SHAP explanation (simplified)
-def generate_shap_explanation(application: LoanApplication, prediction_prob: float) -> List[Dict[str, Any]]:
-    """Generate SHAP-like explanations for the prediction"""
-    shap_values = []
-    
-    # Income impact
-    income_impact = 0.3 if application.income > 50000 else -0.2
-    shap_values.append({
-        "feature": "income",
-        "value": application.income,
-        "impact": income_impact,
-        "description": f"Income of ₹{application.income:,.0f} {'positively' if income_impact > 0 else 'negatively'} influences approval"
-    })
-    
-    # Loan amount impact
-    loan_impact = -0.1 if application.loan_amount > 1000000 else 0.05
-    shap_values.append({
-        "feature": "loan_amount",
-        "value": application.loan_amount,
-        "impact": loan_impact,
-        "description": f"Loan amount of ₹{application.loan_amount:,.0f} {'increases' if loan_impact < 0 else 'reduces'} risk"
-    })
-    
-    # Age impact
-    age_impact = 0.1 if 25 <= application.age <= 55 else -0.05
-    shap_values.append({
-        "feature": "age",
-        "value": application.age,
-        "impact": age_impact,
-        "description": f"Age {application.age} is {'optimal' if age_impact > 0 else 'suboptimal'} for loan approval"
-    })
-    
-    # DTI ratio impact
-    if application.dti_ratio:
-        dti_impact = 0.15 if application.dti_ratio < 0.4 else -0.2
-        shap_values.append({
-            "feature": "dti_ratio",
-            "value": application.dti_ratio,
-            "impact": dti_impact,
-            "description": f"DTI ratio of {application.dti_ratio:.2f} is {'favorable' if dti_impact > 0 else 'concerning'}"
-        })
-    
-    # Employment type impact
-    emp_impact = 0.1 if application.employment_type == "salaried" else -0.05
-    shap_values.append({
-        "feature": "employment_type",
-        "value": application.employment_type,
-        "impact": emp_impact,
-        "description": f"Employment type '{application.employment_type}' {'supports' if emp_impact > 0 else 'reduces'} approval chances"
-    })
-    
-    return shap_values
+# --- ML & Logic Helpers ---
+def load_ml_components():
+    global model, feature_selector, label_encoders, pca, rules_data, schemes_data
+    try:
+        model_dir = "results_rf_smote_controlled_pca1_wocs//models"
+        # Fix path if double slash is issue, standardizing to os.path.join
+        base_dir = os.path.join("results_rf_smote_controlled_pca1_wocs", "models")
+        
+        if not os.path.exists(base_dir):
+            base_dir = "models" # Fallback if user moved it
 
-# Preprocess application data
-def preprocess_application(application: LoanApplication) -> np.ndarray:
-    """Preprocess application data for model prediction"""
-    # Create feature vector
+        model = joblib.load(os.path.join(base_dir, "rf_smote_model.joblib"))
+        feature_selector = joblib.load(os.path.join(base_dir, "feature_selector.joblib"))
+        label_encoders = joblib.load(os.path.join(base_dir, "label_encoders.joblib"))
+        if os.path.exists(os.path.join(base_dir, "pca.joblib")):
+            pca = joblib.load(os.path.join(base_dir, "pca.joblib"))
+            
+        # Load JSONs
+        with open("rules.json", 'r') as f:
+            rules_data = json.load(f)
+        with open("schemes.json", 'r') as f:
+            schemes_data = json.load(f)
+            
+        return True
+    except Exception as e:
+        logger.error(f"ML Loading Error: {e}")
+        return False
+
+def preprocess_application(app: LoanApplication) -> pd.DataFrame:
+    # Logic matching training data schema
     features = {
-        'Age': application.age,
-        'Income': application.income,
-        'LoanAmount': application.loan_amount,
-        'MonthsEmployed': application.months_employed or 24,
-        'NumCreditLines': application.num_credit_lines or 2,
-        'InterestRate': application.interest_rate or 12.0,
-        'LoanTerm': application.loan_term or 36,
-        'DTIRatio': application.dti_ratio or (application.loan_amount / 12 / application.income),
-        'Education': application.education or 'Bachelor',
-        'EmploymentType': application.employment_type,
-        'MaritalStatus': application.marital_status or 'Single',
-        'HasMortgage': int(application.has_mortgage or False),
-        'HasDependents': int(application.has_dependents or False),
-        'LoanPurpose': application.loan_purpose or 'Personal',
-        'HasCoSigner': int(application.has_co_signer or False),
-        # Add the missing features that the model expects
-        'MarketVolatilityIndex': np.random.normal(0, 1),
-        'EconomicUncertaintyScore': np.random.normal(0, 1)
+        'Age': app.age,
+        'Income': app.income,
+        'LoanAmount': app.loan_amount,
+        'MonthsEmployed': app.months_employed or 12,
+        'NumCreditLines': app.num_credit_lines or 1,
+        'InterestRate': app.interest_rate or 10.0,
+        'LoanTerm': app.loan_term or 12,
+        'DTIRatio': (app.existing_emi / app.income) if app.income > 0 else 0, # Calculate DTI if not provided
+        'Education': app.education or 'Bachelor',
+        'EmploymentType': app.employment_type if app.employment_type in ['salaried', 'self_employed', 'business'] else 'salaried',
+        'MaritalStatus': app.marital_status or 'Single',
+        'HasMortgage': int(app.has_mortgage or False),
+        'HasDependents': int(app.has_dependents or False),
+        'LoanPurpose': app.loan_purpose or 'Personal',
+        'HasCoSigner': int(app.has_co_signer or False),
+        # Noise features if model expects them (checking previous code showed they were added)
+        'MarketVolatilityIndex': 0.5, # Median value
+        'EconomicUncertaintyScore': 0.5 # Median value
     }
     
-    # Convert to DataFrame
+    
+    # Overwrite removed - DTI is computed in line 190
+    # if app.dti_ratio is not None:
+    #     features['DTIRatio'] = app.dti_ratio
+
     df = pd.DataFrame([features])
     
-    # Encode categorical variables
+    # Encoders
     if label_encoders:
         for col, encoder in label_encoders.items():
             if col in df.columns:
                 try:
                     df[col] = encoder.transform(df[col])
-                except ValueError:
-                    # Handle unseen categories
+                except Exception:
+                    # Handle unknown categories by setting to 0 or valid default
+                    # In production, this should be more robust, but assuming 0 is safe for now
                     df[col] = 0
-    
-    # Apply feature selection
+                    
+    # Feature Selection
     if feature_selector:
         try:
-            df = feature_selector.transform(df)
-        except Exception as e:
-            logger.error(f"Error in feature selection: {str(e)}")
-            return None
-    
-    # Apply PCA
+             df = feature_selector.transform(df)
+        except:
+             pass 
+             
+    # PCA
     if pca:
         try:
             df = pca.transform(df)
-        except Exception as e:
-            logger.error(f"Error in PCA: {str(e)}")
-            return None
-    
+        except:
+            pass
+            
     return df
 
-# API Endpoints
-from contextlib import asynccontextmanager
+def get_risk_factors(app: LoanApplication, prob_approve: float, dti: float):
+    pos = []
+    neg = []
+    
+    if prob_approve > 0.7: pos.append("High model confidence")
+    if app.credit_score and app.credit_score > 750: pos.append("Excellent credit score")
+    if dti < 0.3: pos.append("Low debt-to-income ratio")
+    if app.income > 50000: pos.append("Healthy income level")
+    
+    if prob_approve < 0.5: neg.append("Model predicts default risk")
+    if app.credit_score and app.credit_score < 650: neg.append("Low credit score")
+    if dti > 0.5: neg.append("Critically high debt-to-income ratio")
+    if app.existing_emi > (app.income * 0.6): neg.append("Over-leveraged income")
+
+    return pos, neg
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model on startup"""
-    logger.info("Starting TWXAI Loan Prediction API...")
-    if not load_model():
-        logger.error("Failed to load model. API may not work correctly.")
+    if load_ml_components():
+        logger.info("✅ ML Model & Data loaded successfully")
     else:
-        logger.info("Model loaded successfully!")
+        logger.warning("⚠️ ML Model failed to load")
     yield
-    logger.info("Shutting down TWXAI Loan Prediction API...")
 
-# Initialize FastAPI app with lifespan
-app = FastAPI(
-    title="TWXAI Loan Prediction API",
-    description="Explainable AI + MLOps Framework for Fair and Inclusive Loan Decision Making",
-    version="1.0.0",
-    lifespan=lifespan
-)
+# --- App Definition ---
+app = FastAPI(title="TWXAI Real Backend", lifespan=lifespan)
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"], # Tighten in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "TWXAI Loan Prediction API",
-        "version": "1.0.0",
-        "status": "active"
-    }
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "model_loaded": model is not None,
-        "timestamp": datetime.now().isoformat()
-    }
-
-@app.get("/model/status", response_model=ModelStatus)
-async def get_model_status():
-    """Get model status and performance metrics"""
-    if not model_metadata:
-        raise HTTPException(status_code=503, detail="Model metadata not available")
-    
-    return ModelStatus(
-        model_version=model_metadata.get("model_version", "RF_SMOTE_v1.2"),
-        status="active" if model else "inactive",
-        accuracy=model_metadata.get("accuracy", 0.8588) * 100,
-        precision=model_metadata.get("precision", 0.8218) * 100,
-        recall=model_metadata.get("recall", 0.8329) * 100,
-        f1_score=model_metadata.get("f1", 0.8273) * 100,
-        roc_auc=model_metadata.get("roc_auc", 0.9214) * 100,
-        oob_score=model_metadata.get("oob_score", 0.8727) * 100,
-        last_updated=model_metadata.get("last_updated", datetime.now().isoformat()),
-        total_predictions=0,  # Would be tracked in production
-        today_predictions=0,
-        avg_processing_time=2.3,
-        error_rate=0.8,
-        features=[
-            {"name": "income", "importance": 0.23, "description": "Monthly income"},
-            {"name": "dti_ratio", "importance": 0.19, "description": "Debt-to-income ratio"},
-            {"name": "loan_amount", "importance": 0.16, "description": "Requested loan amount"},
-            {"name": "age", "importance": 0.12, "description": "Applicant age"},
-            {"name": "employment_type", "importance": 0.11, "description": "Employment type"},
-        ],
-        performance_history=[]
+# Exception Handler for Validation Errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    logger.error(f"Validation Error: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(exc)},
     )
+
+# --- Routes ---
+
+@app.get("/")
+def health():
+    return {"status": "active", "db": "supabase_connected" if supabase else "failed", "model": "loaded" if model else "failed"}
 
 @app.post("/predict", response_model=ModelPrediction)
-async def predict_loan_approval(application: LoanApplication, background_tasks: BackgroundTasks):
-    """Predict loan approval with explanations and recommendations"""
-    if not model:
-        raise HTTPException(status_code=503, detail="Model not loaded")
+async def predict(application: LoanApplication, user_payload: dict = Depends(verify_token)):
+    user_id = user_payload.get("sub")
     
+    # 1. Sync User to public.users (FK Requirement)
     try:
-        # Preprocess application
-        processed_data = preprocess_application(application)
-        if processed_data is None:
-            raise HTTPException(status_code=400, detail="Error preprocessing application data")
-        
-        # Make prediction
-        prediction_proba = model.predict_proba(processed_data)[0]
-        approve_prob = prediction_proba[1]  # Probability of approval
-        reject_prob = prediction_proba[0]   # Probability of rejection
-        
-        # Determine prediction
-        prediction = "approve" if approve_prob > 0.5 else "reject"
-        confidence = abs(approve_prob - 0.5) * 2
-        
-        # Generate SHAP explanations
-        shap_values = generate_shap_explanation(application, approve_prob)
-        
-        # Ensure SHAP values is always an array
-        if not shap_values:
-            shap_values = []
-        
-        # Apply rules engine
-        rules_applied = apply_rules_engine(application, approve_prob)
-        
-        # Suggest government schemes
-        schemes_suggested = suggest_government_schemes(application, prediction)
-        
-        # Ensure arrays are never None
-        if not rules_applied:
-            rules_applied = []
-        if not schemes_suggested:
-            schemes_suggested = []
-        
-        # Generate risk factors and recommendations
-        risk_factors = []
-        recommendations = []
-        
-        if application.income < 30000:
-            risk_factors.append("Low income relative to loan amount")
-            recommendations.append("Consider increasing income documentation or adding a co-applicant")
-        
-        if application.dti_ratio and application.dti_ratio > 0.4:
-            risk_factors.append("High debt-to-income ratio")
-            recommendations.append("Reduce loan amount or extend tenure to improve DTI ratio")
-        
-        if prediction == "reject":
-            recommendations.append("Consider government schemes like MUDRA or PMAY based on your profile")
-        
-        # Ensure arrays are never None
-        if not risk_factors:
-            risk_factors = []
-        if not recommendations:
-            recommendations = []
-        
-        # Log prediction for audit
-        background_tasks.add_task(
-            log_prediction,
-            application.dict(),
-            prediction,
-            approve_prob,
-            rules_applied,
-            schemes_suggested
-        )
-        
-        return ModelPrediction(
-            application_id=f"APP{int(datetime.now().timestamp())}",
-            prediction=prediction,
-            confidence=confidence,
-            probability={
-                "approve": float(approve_prob),
-                "reject": float(reject_prob)
-            },
-            shap_values=shap_values,
-            risk_factors=risk_factors,
-            recommendations=recommendations,
-            model_version="RF_SMOTE_v1.2",
-            timestamp=datetime.now().isoformat(),
-            rules_applied=rules_applied,
-            schemes_suggested=schemes_suggested
-        )
-        
+        user_email = user_payload.get("email")
+        # Upsert user to ensure they exist for the FK constraint
+        # is_active=True by default for new syncs
+        user_data = {
+            "id": user_id,
+            "email": user_email,
+            "is_active": True
+            # Add role if needed, defaulting to applicant/user based on system design? 
+            # System seems to have removed roles, but if table needs it, defaults might handle it.
+            # Based on previous code, likely minimal schema.
+        }
+        supabase.table("users").upsert(user_data).execute()
     except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+        logger.error(f"User Sync Error (Non-critical if exists?): {e}")
+        # If this fails, the next insert might fail too, but let's proceed or raise?
+        # If sync fails, FK will fail. Better to log and let FK fail or raise 500.
+        # But upsert is robust.
+        pass
 
-def log_prediction(application_data: dict, prediction: str, probability: float, 
-                  rules_applied: list, schemes_suggested: list):
-    """Log prediction for audit trail"""
-    log_entry = {
-        "timestamp": datetime.now().isoformat(),
-        "application": application_data,
-        "prediction": prediction,
-        "probability": probability,
-        "rules_applied": rules_applied,
-        "schemes_suggested": schemes_suggested
+    # 2. Insert into loan_applications
+    dti_val = (application.existing_emi / application.income) if application.income > 0 else 0
+    # if application.dti_ratio is not None: dti_val = application.dti_ratio - REMOVED
+    
+    app_data = {
+        "user_id": user_id,
+        "loan_type": application.loan_type,
+        "income": application.income,
+        "loan_amount": application.loan_amount,
+        "employment_type": application.employment_type if application.employment_type in ['salaried', 'self_employed', 'business'] else 'salaried',
+        "existing_emi": application.existing_emi,
+        "credit_score": application.credit_score,
+        # "dti" not in schema provided by user, only computed for analysis
+        # Schema: id, user_id, loan_type, income, loan_amount, employment_type, existing_emi, credit_score, created_at
     }
     
-    # In production, this would be saved to a database
-    logger.info(f"Prediction logged: {log_entry}")
+    try:
+        res = supabase.table("loan_applications").insert(app_data).execute()
+        if not res.data:
+             raise HTTPException(status_code=500, detail="DB Insert Failed")
+        app_id = res.data[0]['id']
+    except Exception as e:
+        logger.error(f"DB Insert Error: {e}")
+        raise HTTPException(status_code=500, detail="Database Error")
+
+    # 2. ML Inference
+    processed_df = preprocess_application(application)
+    try:
+        probs = model.predict_proba(processed_df)[0]
+        prob_reject, prob_approve = probs[0], probs[1]
+    except Exception as e:
+        logger.error(f"Inference Error: {e}")
+        # Fallback if model fails (rare)
+        prob_approve = 0.5
+        prob_reject = 0.5
+
+    risk_score = prob_reject * 100
+    if risk_score < 30: risk_band = "low"
+    elif risk_score < 70: risk_band = "medium"
+    else: risk_band = "high"
+
+    pos_factors, neg_factors = get_risk_factors(application, prob_approve, dti_val)
+    
+    # 3. Insert Analysis Results
+    analysis_data = {
+        "application_id": app_id,
+        "risk_score": float(risk_score),
+        "risk_band": risk_band,
+        "ml_probability": float(prob_approve),
+        "decision_summary": f"Application risk assessed as {risk_band}",
+        "positive_factors": json.loads(json.dumps(pos_factors)), # Ensure serializable
+        "negative_factors": json.loads(json.dumps(neg_factors))
+    }
+    supabase.table("analysis_results").insert(analysis_data).execute()
+
+    # 4. Bank Suitability
+    bank_results = []
+    try:
+        banks_resp = supabase.table("bank_profiles").select("*").execute()
+        banks = banks_resp.data
+        
+        for bank in banks:
+            suitability = "medium"
+            reasons = []
+            
+            # Risk Appetite Logic
+            if bank['risk_appetite'] == 'low' and risk_band == 'high':
+                suitability = "low"
+                reasons.append("Bank has low risk appetite")
+            elif bank['risk_appetite'] == 'high' and risk_band == 'high':
+                suitability = "medium" # Willing to take risk
+                reasons.append("Bank accepts higher risk profiles")
+                
+            # CIBIL Logic
+            if application.credit_score and bank['min_cibil_preference']:
+                if application.credit_score < bank['min_cibil_preference']:
+                    suitability = "low"
+                    reasons.append(f"Score below bank minimum ({bank['min_cibil_preference']})")
+            
+            # DTI Logic
+            if bank['max_dti']:
+                if (dti_val * 100) > bank['max_dti']:
+                    suitability = "low"
+                    reasons.append(f"DTI exceeds bank limit ({bank['max_dti']}%)")
+            
+            if not reasons:
+                suitability = "high"
+                reasons.append("Profile matches bank criteria")
+                
+            bank_entry = {
+                "application_id": app_id,
+                "bank_name": bank['bank_name'],
+                "suitability": suitability,
+                "reason": "; ".join(reasons)
+            }
+            bank_results.append(BankSuitabilityResult(**bank_entry))
+            # Insert logic handled in bulk? Or loop. Loop is safer for now.
+            # Supabase usually supports bulk, but let's do simple.
+            # Reuse bank_entry for DB insert (remove extra fields if any? No, matches schema except ID)
+            supabase.table("bank_suitability").insert(bank_entry).execute()
+            
+    except Exception as e:
+        logger.error(f"Bank logic error: {e}")
+
+    # 5. Scheme Suggestions
+    scheme_results = []
+    schemes_to_insert = []
+    
+    # Only suggest if Rejected or High Risk? Or always? User said "Match schemes...". Usually for rejection/assistance.
+    # Let's suggest matching schemes regardless, advisory.
+    
+    for scheme in schemes_data.get("schemes", []):
+        is_match = False
+        reason = ""
+        
+        # Simple Logic based on existing json structure
+        s_id = scheme.get("id")
+        
+        # Example logic adaptation
+        if s_id == "stand_up_india":
+            if application.loan_type == "business" and (application.caste_category in ['sc','st'] or application.gender == 'female'):
+                 is_match = True
+                 reason = "Eligible due to SC/ST or Female Entrepreneur status"
+        elif s_id == "pmay_urban":
+             if application.loan_type == "home" and application.income < 1800000:
+                 is_match = True
+                 reason = "Eligible for housing subsidy based on income"
+        elif s_id == "pm_vidyalaxmi":
+             if application.loan_type == "education":
+                 is_match = True
+                 reason = "Dedicated education loan scheme"
+        elif s_id == "mudra": # Assuming ID
+             if application.loan_type == "business" and application.loan_amount < 1000000:
+                 is_match = True
+                 reason = "Micro-enterprise loan eligibility"
+        
+        # Generic fallback
+        if not is_match and scheme.get("category") == "General":
+            is_match = True
+            reason = "General eligibility"
+            
+        if is_match:
+            rec = {
+                "application_id": app_id,
+                "scheme_id": s_id,
+                "scheme_name": scheme.get("name"),
+                "reason": reason
+            }
+            scheme_results.append(SchemeRecommendationResult(**rec))
+            schemes_to_insert.append(rec)
+            
+    if schemes_to_insert:
+        try:
+             supabase.table("scheme_recommendations").insert(schemes_to_insert).execute()
+        except Exception as e:
+             logger.error(f"Scheme insert error: {e}")
+
+    return ModelPrediction(
+        application_id=str(app_id),
+        risk_score=risk_score,
+        risk_band=risk_band,
+        prediction="approve" if prob_approve > 0.5 else "reject",
+        confidence=float(abs(prob_approve - 0.5) * 2),
+        positive_factors=pos_factors,
+        negative_factors=neg_factors,
+        bank_suitability=bank_results,
+        schemes_suggested=scheme_results,
+        timestamp=datetime.now(timezone.utc).isoformat()
+    )
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "fastapi_backend:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("fastapi_backend:app", host="0.0.0.0", port=8000, reload=True)

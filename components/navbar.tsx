@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Building2, LogOut } from "lucide-react"
+import { supabase } from "@/lib/supabase/client"
 
 interface NavbarProps {
   title: string
@@ -9,7 +10,8 @@ interface NavbarProps {
 }
 
 export function Navbar({ title, userRole }: NavbarProps) {
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     window.location.href = "/"
   }
 
@@ -22,7 +24,9 @@ export function Navbar({ title, userRole }: NavbarProps) {
           </div>
           <div>
             <h1 className="font-semibold text-foreground">AI Loan Platform</h1>
-            {userRole && <p className="text-xs text-muted-foreground">{userRole}</p>}
+            {userRole && (
+              <p className="text-xs text-muted-foreground">{userRole}</p>
+            )}
           </div>
         </div>
 

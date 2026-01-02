@@ -22,37 +22,91 @@ import {
   MessageCircle,
 } from "lucide-react"
 
+import { supabase } from "@/lib/supabase/client"
+import { useEffect, useCallback } from "react"
+
 export default function UserDashboard() {
   const [selectedSection, setSelectedSection] = useState<string | null>(null)
+  const [applications, setApplications] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({ total: 0, approved: 0, review: 0, rejected: 0 })
+  const [userEmail, setUserEmail] = useState<string>("")
 
-  // Mock data for applications
-  const applications = [
-    {
-      id: "APP001",
-      type: "Home Loan",
-      amount: "₹25,00,000",
-      status: "approved",
-      progress: 100,
-      submittedDate: "2024-01-15",
-    },
-    {
-      id: "APP002",
-      type: "Personal Loan",
-      amount: "₹5,00,000",
-      status: "under-review",
-      progress: 60,
-      submittedDate: "2024-01-20",
-    },
-    {
-      id: "APP003",
-      type: "Business Loan",
-      amount: "₹10,00,000",
-      status: "rejected",
-      progress: 100,
-      submittedDate: "2024-01-10",
-    },
-  ]
+  // const supabase = createClient() - Removed, using imported singleton
 
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      setUserEmail(user.email || "")
+
+      // Fetch Applications with Analysis Results
+      const { data: appData, error: appError } = await supabase
+        .from('loan_applications')
+        .select(`
+          *,
+          analysis_results!analysis_results_application_id_fkey (
+            risk_score,
+            risk_band,
+            ml_probability,
+            decision_summary,
+            positive_factors,
+            negative_factors,
+            created_at
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (appError) throw appError
+
+      // Process Data
+      // Process Data
+      const formattedApps = appData?.map(app => {
+        const analysis = app.analysis_results?.[0]
+        // Derive prediction from ml_probability if available
+        let prediction = 'under-review'
+        if (analysis?.ml_probability !== undefined) {
+          prediction = analysis.ml_probability > 0.5 ? 'approve' : 'reject'
+        }
+
+        return {
+          id: app.id.slice(0, 8).toUpperCase(), // Short ID
+          type: app.loan_type?.replace('-', ' ') || 'Loan',
+          amount: typeof app.loan_amount === 'number' ? `₹${app.loan_amount.toLocaleString()}` : app.loan_amount,
+          status: prediction === 'reject' ? 'rejected' : 'approved',
+          progress: 100, // Complete since it's instant
+          submittedDate: new Date(app.created_at).toLocaleDateString()
+        }
+      }) || []
+
+      setApplications(formattedApps)
+
+      // Calculate Stats
+      const total = formattedApps.length
+      const approved = formattedApps.filter(a => a.status === 'approved').length
+      const rejected = formattedApps.filter(a => a.status === 'rejected').length
+
+      setStats({
+        total,
+        approved,
+        rejected,
+        review: total - approved - rejected // Should be 0 with instant ML
+      })
+
+    } catch (error) {
+      console.error("Error fetching dashboard:", error)
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [fetchDashboardData])
+
+  // Helper Functions
   const getStatusColor = (status: string) => {
     switch (status) {
       case "approved":
@@ -121,7 +175,7 @@ export default function UserDashboard() {
     },
   ]
 
-  if (selectedSection === "track") {
+  if (selectedSection === "track" || selectedSection === "status") {
     return (
       <div className="min-h-screen bg-background">
         <Navbar title="Track Application" userRole="Loan Applicant" />
@@ -135,57 +189,60 @@ export default function UserDashboard() {
             </div>
 
             <div className="grid gap-6">
-              {applications.map((app) => (
-                <Card key={app.id} className="shadow-sm hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-lg">{app.type}</CardTitle>
-                        <CardDescription>Application ID: {app.id}</CardDescription>
-                      </div>
-                      <Badge className={getStatusColor(app.status)}>
-                        {getStatusIcon(app.status)}
-                        <span className="ml-1 capitalize">{app.status.replace("-", " ")}</span>
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Amount:</span>
-                        <span className="ml-2 font-medium">{app.amount}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Submitted:</span>
-                        <span className="ml-2 font-medium">{app.submittedDate}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Progress</span>
-                        <span>{app.progress}%</span>
-                      </div>
-                      <Progress value={app.progress} className="h-2" />
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2">
-                      <div className="flex space-x-2 text-xs text-muted-foreground">
-                        <span>Submitted</span>
-                        <span>→</span>
-                        <span>Under Review</span>
-                        <span>→</span>
-                        <span>Decision</span>
-                      </div>
-                      {app.status === "approved" && (
-                        <Button size="sm" variant="outline">
-                          Download SHAP Report
-                        </Button>
-                      )}
-                    </div>
+              {applications.length === 0 ? (
+                <Card>
+                  <CardContent className="p-6 text-center text-muted-foreground">
+                    No applications found. Submit a new application to get started.
                   </CardContent>
                 </Card>
-              ))}
+              ) : (
+                applications.map((app) => (
+                  <Card key={app.id} className="shadow-sm hover:shadow-md transition-shadow">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-lg">{app.type}</CardTitle>
+                          <CardDescription>Application ID: {app.id}</CardDescription>
+                        </div>
+                        <Badge className={getStatusColor(app.status)}>
+                          {getStatusIcon(app.status)}
+                          <span className="ml-1 capitalize">{app.status.replace("-", " ")}</span>
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Amount:</span>
+                          <span className="ml-2 font-medium">{app.amount}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Submitted:</span>
+                          <span className="ml-2 font-medium">{app.submittedDate}</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Progress</span>
+                          <span>{app.progress}%</span>
+                        </div>
+                        <Progress value={app.progress} className="h-2" />
+                      </div>
+
+                      <div className="flex justify-between items-center pt-2">
+                        <div className="flex space-x-2 text-xs text-muted-foreground">
+                          <span>Submitted</span>
+                          <span>→</span>
+                          <span>Under Review</span>
+                          <span>→</span>
+                          <span>Decision</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -207,7 +264,7 @@ export default function UserDashboard() {
               </Button>
             </div>
             <div className="grid lg:grid-cols-2 gap-6">
-              <NewApplicationForm />
+              <NewApplicationForm onPredictionComplete={fetchDashboardData} />
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -262,6 +319,43 @@ export default function UserDashboard() {
     )
   }
 
+  if (selectedSection === "profile") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar title="User Profile" userRole="Loan Applicant" />
+        <div className="p-6">
+          <div className="max-w-md mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold">My Profile</h1>
+              <Button variant="outline" onClick={() => setSelectedSection(null)}>
+                Back to Dashboard
+              </Button>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Profile Details</CardTitle>
+                <CardDescription>Manage your account information</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Email Address</label>
+                  <input
+                    type="text"
+                    value={userEmail}
+                    readOnly
+                    className="w-full px-3 py-2 border border-input rounded-md bg-muted text-muted-foreground"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+        <Chatbot />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar title="User Dashboard" userRole="Loan Applicant" />
@@ -303,7 +397,7 @@ export default function UserDashboard() {
                 <CardTitle className="text-sm font-medium text-muted-foreground">Total Applications</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">3</div>
+                <div className="text-2xl font-bold">{stats.total}</div>
               </CardContent>
             </Card>
             <Card>
@@ -311,18 +405,19 @@ export default function UserDashboard() {
                 <CardTitle className="text-sm font-medium text-muted-foreground">Approved</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-success">1</div>
+                <div className="text-2xl font-bold text-success">{stats.approved}</div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Under Review</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Rejected</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-warning">1</div>
+                <div className="text-2xl font-bold text-destructive">{stats.rejected}</div>
               </CardContent>
             </Card>
           </div>
+          {/* Note: Replaced "Under Review" text with "Rejected" since stats.review is likely 0 and Rejected is more relevant for this instant-decision system */}
         </div>
       </div>
       <Chatbot />
@@ -331,15 +426,14 @@ export default function UserDashboard() {
 }
 
 // Enhanced New Application Form Component with AI Integration
-function NewApplicationForm() {
+function NewApplicationForm({ onPredictionComplete }: { onPredictionComplete?: () => void }) {
   const [formData, setFormData] = useState({
-    name: "",
-    age: "",
     income: "",
-    loanType: "",
+    loanType: "personal", // default
     loanAmount: "",
-    interestRate: "",
     employmentType: "salaried",
+    existing_emi: "",
+    credit_score: ""
   })
 
   const [showPrediction, setShowPrediction] = useState(false)
@@ -349,10 +443,9 @@ function NewApplicationForm() {
     setShowPrediction(true)
   }
 
-  const handlePredictionComplete = (result: any) => {
-    // Handle prediction result
+  const handlePredictionCompleteResult = (result: any) => {
     console.log("Prediction completed:", result)
-    // Could redirect to application status or show success message
+    onPredictionComplete?.()
   }
 
   if (showPrediction) {
@@ -367,10 +460,6 @@ function NewApplicationForm() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-muted-foreground">Name:</span>
-                  <span className="ml-2 font-medium">{formData.name}</span>
-                </div>
-                <div>
                   <span className="text-muted-foreground">Loan Type:</span>
                   <span className="ml-2 font-medium capitalize">{formData.loanType}</span>
                 </div>
@@ -382,6 +471,10 @@ function NewApplicationForm() {
                   <span className="text-muted-foreground">Monthly Income:</span>
                   <span className="ml-2 font-medium">₹{Number(formData.income).toLocaleString()}</span>
                 </div>
+                <div>
+                  <span className="text-muted-foreground">Credit Score:</span>
+                  <span className="ml-2 font-medium">{formData.credit_score}</span>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -389,14 +482,16 @@ function NewApplicationForm() {
 
         <ModelPrediction
           applicationData={{
-            name: formData.name,
-            age: Number(formData.age),
-            income: Number(formData.income),
-            loanAmount: Number(formData.loanAmount),
-            loanType: formData.loanType,
-            employmentType: formData.employmentType,
+            name: "Applicant",
+            age: 35,
+            income: Number(formData.income) || 0,
+            loan_amount: Number(formData.loanAmount) || 0,
+            loan_type: formData.loanType.toLowerCase(),
+            employment_type: formData.employmentType.toLowerCase(),
+            existing_emi: Number(formData.existing_emi) || 0,
+            credit_score: formData.credit_score ? Number(formData.credit_score) : null,
           }}
-          onPredictionComplete={handlePredictionComplete}
+          onPredictionComplete={handlePredictionCompleteResult}
         />
 
         <Button variant="outline" onClick={() => setShowPrediction(false)} className="w-full">
@@ -414,29 +509,6 @@ function NewApplicationForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Full Name</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Age</label>
-              <input
-                type="number"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                value={formData.age}
-                onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Monthly Income (₹)</label>
@@ -457,7 +529,7 @@ function NewApplicationForm() {
                 required
               >
                 <option value="salaried">Salaried</option>
-                <option value="self-employed">Self Employed</option>
+                <option value="self_employed">Self Employed</option>
                 <option value="business">Business Owner</option>
                 <option value="freelancer">Freelancer</option>
               </select>
@@ -465,21 +537,6 @@ function NewApplicationForm() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Loan Type</label>
-              <select
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                value={formData.loanType}
-                onChange={(e) => setFormData({ ...formData, loanType: e.target.value })}
-                required
-              >
-                <option value="">Select loan type</option>
-                <option value="home">Home Loan</option>
-                <option value="personal">Personal Loan</option>
-                <option value="business">Business Loan</option>
-                <option value="education">Education Loan</option>
-              </select>
-            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Loan Amount (₹)</label>
               <input
@@ -490,18 +547,47 @@ function NewApplicationForm() {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Loan Type</label>
+              <select
+                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                value={formData.loanType}
+                onChange={(e) => setFormData({ ...formData, loanType: e.target.value })}
+                required
+              >
+                <option value="personal">Personal Loan</option>
+                <option value="home">Home Loan</option>
+                <option value="business">Business Loan</option>
+                <option value="education">Education Loan</option>
+                <option value="agriculture">Agriculture Loan</option>
+                <option value="msme">MSME Loan</option>
+              </select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Expected Interest Rate (%)</label>
-            <input
-              type="number"
-              step="0.1"
-              className="w-full px-3 py-2 border border-input rounded-md bg-background"
-              value={formData.interestRate}
-              onChange={(e) => setFormData({ ...formData, interestRate: e.target.value })}
-              required
-            />
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Existing Monthly EMI (₹)</label>
+              <input
+                type="number"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                value={formData.existing_emi}
+                onChange={(e) => setFormData({ ...formData, existing_emi: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Credit Score (CIBIL)</label>
+              <input
+                type="number"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                value={formData.credit_score}
+                onChange={(e) => setFormData({ ...formData, credit_score: e.target.value })}
+                required
+                min="300"
+                max="900"
+              />
+            </div>
           </div>
 
           <Button type="submit" className="w-full bg-accent hover:bg-accent/90">
@@ -512,6 +598,7 @@ function NewApplicationForm() {
     </Card>
   )
 }
+
 
 // Rules and Schemes Engine Component
 function RulesAndSchemesEngine() {

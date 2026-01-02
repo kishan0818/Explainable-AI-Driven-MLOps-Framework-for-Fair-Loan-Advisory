@@ -3,27 +3,82 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Building2, Shield, TrendingUp } from "lucide-react"
+import { Building2, Shield, TrendingUp, Loader2, AlertCircle } from "lucide-react"
+import { supabase } from "@/lib/supabase/client"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function LoginPage() {
-  const [userType, setUserType] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [isSignUp, setIsSignUp] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  const handleLogin = (e: React.FormEvent) => {
+  const router = useRouter()
+  // const supabase = createClient() - Removed, using imported singleton
+
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Mock login logic - redirect based on user type
-    if (userType === "user") {
-      window.location.href = "/user/dashboard"
-    } else if (userType === "officer") {
-      window.location.href = "/officer/dashboard"
-    } else if (userType === "admin") {
-      window.location.href = "/admin/dashboard"
+    setLoading(true)
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      if (isSignUp) {
+        // Sign Up Logic
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        })
+        if (signUpError) throw signUpError
+
+        // Sync user to public.users table (Best effort for signup, auth trigger preferred usually but client-side requested)
+        if (data.user) {
+          await supabase.from('users').upsert({
+            id: data.user.id,
+            email: email
+          }, { onConflict: 'id' })
+        }
+
+        setSuccessMessage("Sign up successful! Please check your email for the verification link.")
+        setIsSignUp(false)
+      } else {
+        // Sign In Logic
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (signInError) throw signInError
+
+        // Sync user to public.users table on login (Ensure record exists)
+        if (data.user) {
+          const { error: syncError } = await supabase.from('users').upsert({
+            id: data.user.id,
+            email: email
+          }, { onConflict: 'id' })
+
+          if (syncError) {
+            console.error("Failed to sync user profile:", syncError)
+            // Proceed anyway as auth is successful
+          }
+        }
+
+        router.push("/user/dashboard")
+        router.refresh()
+      }
+    } catch (err: any) {
+      setError(err.message || "An error occurred during authentication")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -71,24 +126,28 @@ export default function LoginPage() {
         {/* Right side - Login Form */}
         <Card className="w-full max-w-md mx-auto shadow-lg">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
-            <CardDescription>Choose your role and enter your credentials to access the platform</CardDescription>
+            <CardTitle className="text-2xl font-bold">
+              {isSignUp ? "Create an Account" : "Sign In"}
+            </CardTitle>
+            <CardDescription>
+              {isSignUp
+                ? "Enter your details to register for the platform"
+                : "Enter your credentials to access the platform"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="userType">User Type</Label>
-                <Select value={userType} onValueChange={setUserType} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">Loan Applicant</SelectItem>
-                    <SelectItem value="officer">Loan Officer</SelectItem>
-                    <SelectItem value="admin">Administrator</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <form onSubmit={handleAuth} className="space-y-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              {successMessage && (
+                <Alert className="border-green-500 text-green-700 bg-green-50">
+                  <AlertDescription>{successMessage}</AlertDescription>
+                </Alert>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -99,6 +158,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -111,16 +171,39 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={loading}
+                  minLength={6}
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={!userType || !email || !password}>
-                Sign In
+              <Button type="submit" className="w-full" disabled={loading || !email || !password}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isSignUp ? "Creating Account..." : "Signing In..."}
+                  </>
+                ) : (
+                  isSignUp ? "Sign Up" : "Sign In"
+                )}
               </Button>
             </form>
           </CardContent>
+          <CardFooter className="flex justify-center">
+            <Button
+              variant="link"
+              className="text-sm text-muted-foreground"
+              onClick={() => {
+                setIsSignUp(!isSignUp)
+                setError(null)
+                setSuccessMessage(null)
+              }}
+            >
+              {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
+            </Button>
+          </CardFooter>
         </Card>
       </div>
     </div>
   )
 }
+

@@ -7,7 +7,53 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { MessageCircle, Send, X, Bot, User, ExternalLink } from "lucide-react"
-import { getChatbotResponse, findRelevantSchemes, findRelevantRules, governmentSchemes, rbiRules } from "@/lib/mockdata"
+// Local definitions to replace deleted mockdata
+const governmentSchemes = [
+  { id: "mudra", name: "MUDRA Loan", description: "Loans for small businesses" },
+  { id: "pmay", name: "PMAY (Housing)", description: "Affordable housing scheme" },
+  { id: "cgtsme", name: "CGTMSE", description: "Credit guarantee for MSEs" },
+]
+
+const rbiRules = [
+  { id: "psl", title: "Priority Sector Lending", description: "Mandatory lending to specific sectors" },
+  { id: "kyc", title: "KYC Norms", description: "Know Your Customer specifications" },
+]
+
+function getChatbotResponse(input: string) {
+  const lowerInput = input.toLowerCase()
+  if (lowerInput.includes("mudra")) {
+    return {
+      answer: "MUDRA loans are designed to support micro-enterprises. They come in three categories: Shishu, Kishore, and Tarun, depending on the loan amount.",
+      relatedSchemes: ["mudra"],
+      relatedRules: []
+    }
+  }
+  if (lowerInput.includes("pmay") || lowerInput.includes("housing")) {
+    return {
+      answer: "Pradhan Mantri Awas Yojana (PMAY) aims to provide affordable housing for all. It offers interest subsidies for first-time homebuyers.",
+      relatedSchemes: ["pmay"],
+      relatedRules: []
+    }
+  }
+  if (lowerInput.includes("document") || lowerInput.includes("paper")) {
+    return {
+      answer: "Typically, you need ID proof (Aadhar/PAN), address proof, and income proof (salary slips/ITR) for loan applications.",
+      relatedSchemes: [],
+      relatedRules: ["kyc"]
+    }
+  }
+  return null
+}
+
+function findRelevantSchemes(input: string) {
+  const lowerInput = input.toLowerCase()
+  return governmentSchemes.filter(s => lowerInput.includes(s.name.toLowerCase()) || lowerInput.includes(s.description.toLowerCase()))
+}
+
+function findRelevantRules(input: string) {
+  const lowerInput = input.toLowerCase()
+  return rbiRules.filter(r => lowerInput.includes(r.title.toLowerCase()) || lowerInput.includes(r.description.toLowerCase()))
+}
 
 interface Message {
   id: string
@@ -161,11 +207,10 @@ export function Chatbot({ className = "" }: ChatbotProps) {
                 <div key={message.id} className="space-y-2">
                   <div className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
                     <div
-                      className={`max-w-[80%] p-3 rounded-lg text-sm ${
-                        message.type === "user"
+                      className={`max-w-[80%] p-3 rounded-lg text-sm ${message.type === "user"
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-muted-foreground"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start space-x-2">
                         {message.type === "bot" && <Bot className="w-4 h-4 mt-0.5 flex-shrink-0" />}

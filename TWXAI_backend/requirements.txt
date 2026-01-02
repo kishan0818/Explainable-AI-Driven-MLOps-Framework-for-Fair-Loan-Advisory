@@ -12,3 +12,12 @@ scipy>=1.7.0
 plotly>=5.0.0
 imbalanced-learn>=0.9.0
 lightgbm
+
+# Backend & Database
+fastapi>=0.95.0
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+supabase>=1.0.3
+python-jose[cryptography]>=3.3.0
+python-dotenv>=1.0.0
+pydantic[email]>=1.10.0
