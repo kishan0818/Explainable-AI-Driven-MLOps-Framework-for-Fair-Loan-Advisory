@@ -11,6 +11,7 @@ import {
   Building2, Lightbulb, FileText, Info, ArrowRight, ShieldCheck
 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
+import { GovernmentSchemes } from "@/components/government-schemes"
 
 interface ModelPredictionProps {
   applicationData?: any
@@ -58,7 +59,7 @@ export function ModelPrediction({
       riskFactors: result.negative_factors || [],
       positiveFactors: result.positive_factors || [],
       banks: sortedBanks || [],
-      schemes: result.schemes_suggested || [],
+      schemes: result.schemes || result.scheme_recommendations || result.schemes_suggested || [],
       decisionSummary: result.decision_summary
     }
     setPrediction(predictionData)
@@ -153,52 +154,86 @@ export function ModelPrediction({
                 : "Based on current inputs, standard approval is difficult. See options below."}
             </p>
           </div>
-          <Badge className={`text-base px-4 py-1 ${isApproved ? 'bg-success text-success-foreground' : 'bg-warning text-warning-foreground'}`}>
-            {isApproved ? `${(prediction.confidence * 100).toFixed(0)}% Match` : "Eligibility Review"}
-          </Badge>
+          <div className="flex items-center gap-3">
+            {/* If Rejected, Show Eligibility Check Button instead of simple badge */}
+            {!isApproved && (
+              <Button variant="outline" className="bg-background text-warning-foreground border-warning-foreground/20">
+                Eligibility Review
+              </Button>
+            )}
+            <Badge variant={isApproved ? "default" : "secondary"} className="h-8 px-3 text-sm">
+              {Math.round(prediction.confidence * 100)}% Match
+            </Badge>
+          </div>
         </div>
 
-        <CardContent className="pt-6 space-y-6">
-          {/* Key Factors Grid */}
+        {/* Actionable Next Steps for Improvement */}
+        {!isApproved && (
+          <div className="bg-warning/5 border-t border-warning/10 p-4">
+            <h4 className="font-semibold text-sm mb-2 flex items-center">
+              <Lightbulb className="w-4 h-4 mr-2 text-warning-foreground" />
+              What You Can Do Next
+            </h4>
+            <div className="grid md:grid-cols-3 gap-4 text-sm text-muted-foreground">
+              <div className="flex gap-2">
+                <span className="text-primary font-bold">1.</span>
+                <span>Improve your credit score (pay existing dues).</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-primary font-bold">2.</span>
+                <span>Reduce loan amount or increase tenure.</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-primary font-bold">3.</span>
+                <span>Consider adding a co-applicant with income.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <CardContent className="pt-6">
           <div className="grid md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <h3 className="font-semibold flex items-center"><ShieldCheck className="w-4 h-4 mr-2" /> Analysis Summary</h3>
-              <p className="text-sm text-balance text-muted-foreground leading-relaxed">
-                {prediction.decisionSummary || "Your profile has been analyzed against 15+ banking parameters including income stability, credit history, and debt-to-income ratio."}
+            {/* Summary Section */}
+            <div>
+              <h3 className="font-semibold flex items-center mb-2">
+                <ShieldCheck className="w-4 h-4 mr-2" /> Analysis Summary
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                {prediction.decisionSummary || `Your profile has been analyzed against 15+ banking parameters including income stability, credit history, and debt-to-income ratio.`}
               </p>
 
-              <div className="flex gap-2 mt-2">
-                {prediction.riskFactors.length === 0 && <Badge variant="outline" className="text-success border-success">No Major Risks</Badge>}
-                {prediction.riskFactors.map((r: string, i: number) => (
-                  <Badge key={i} variant="secondary" className="text-xs bg-red-50 text-red-700 border-red-100">{r}</Badge>
+              <div className="flex flex-wrap gap-2">
+                {prediction.positiveFactors.slice(0, 2).map((f: string, i: number) => (
+                  <Badge key={i} variant="outline" className="text-success border-success/30 bg-success/5 font-normal">
+                    {f}
+                  </Badge>
                 ))}
+                {prediction.riskFactors.length > 0 && (
+                  <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/5 font-normal">
+                    {prediction.riskFactors[0]}
+                  </Badge>
+                )}
               </div>
             </div>
 
-            {/* Context Accordion */}
+            {/* Context Accordion (New Feature) */}
             {loanContext && (
               <div className="bg-muted/30 rounded-lg p-1">
                 <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="item-1" className="border-b-0">
-                    <AccordionTrigger className="px-4 py-2 hover:no-underline text-sm font-medium">
+                  <AccordionItem value="item-1" className="border-none">
+                    <AccordionTrigger className="px-4 py-2 text-sm font-medium hover:no-underline">
                       View Eligibility & Documents for {loanContext.name}
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 text-sm text-muted-foreground space-y-2">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="font-semibold text-foreground mb-1">Documents</div>
-                          <ul className="list-disc list-inside text-xs space-y-1">
-                            {loanContext.documents_required?.map((d: string, i: number) => <li key={i}>{d}</li>)}
-                          </ul>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-foreground mb-1">Eligibility</div>
-                          <ul className="list-disc list-inside text-xs space-y-1">
-                            {Object.entries(loanContext.eligibility_criteria || {}).map(([k, v]: any, i) => (
-                              <li key={i}><span className="capitalize">{k.replace('_', ' ')}</span>: {v}</li>
-                            ))}
-                          </ul>
-                        </div>
+                    <AccordionContent className="px-4 pb-4 text-sm text-muted-foreground space-y-3">
+                      <div>
+                        <strong className="text-foreground block mb-1">Best For:</strong>
+                        {loanContext.best_for}
+                      </div>
+                      <div>
+                        <strong className="text-foreground block mb-1">Documents Required:</strong>
+                        <ul className="list-disc list-inside">
+                          {loanContext.documents_required?.slice(0, 3).map((d: string, i: number) => <li key={i}>{d}</li>)}
+                        </ul>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
@@ -248,37 +283,11 @@ export function ModelPrediction({
 
         {/* 3. Government Schemes (Contextual) */}
         <Card className={`h-full ${!isApproved ? 'ring-2 ring-primary/20 shadow-lg' : ''}`}>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Lightbulb className="w-5 h-5 mr-2 text-primary" />
-              Government Schemes
-            </CardTitle>
-            <CardDescription>Subsidies and support you may be eligible for</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {prediction.schemes && prediction.schemes.length > 0 ? (
-              prediction.schemes.map((scheme: any, idx: number) => (
-                <div key={idx} className="p-4 bg-background rounded-xl border hover:border-primary/50 transition-colors shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-primary/10 p-2 rounded-lg"><FileText className="w-4 h-4 text-primary" /></div>
-                    <div>
-                      <div className="font-semibold text-primary">{scheme.scheme_name}</div>
-                      <p className="text-xs text-muted-foreground mt-1 leading-snug">{scheme.reason}</p>
-                      <Button variant="link" className="h-auto p-0 text-xs mt-2 text-primary">View Details <ArrowRight className="w-3 h-3 ml-1" /></Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-sm text-muted-foreground p-4 bg-muted/30 rounded-lg text-center">
-                {isApproved
-                  ? "Since you are eligible for standard banking, specific relief schemes are not prioritized."
-                  : "No specific government schemes matched this profile."}
-              </div>
-            )}
+          <CardContent className="pt-6">
+            <GovernmentSchemes schemes={prediction.schemes} applicationId={prediction.applicationId} referenceData={referenceData} />
           </CardContent>
         </Card>
-      </div>
-    </div>
+      </div >
+    </div >
   )
 }

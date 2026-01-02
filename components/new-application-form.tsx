@@ -19,9 +19,17 @@ const formSchema = z.object({
     existing_emi: z.preprocess((val) => Number(val), z.number().min(0).default(0)),
     loan_type: z.string().min(1, "Loan type is required"),
     employment_type: z.string().min(1, "Employment type is required"),
-    credit_score: z.preprocess((val) => (val === "" || val === null ? null : Number(val)), z.number().min(300).max(900).nullable().optional()),
+    credit_score: z.preprocess((val) => (val === "" || val === null || val === undefined ? null : Number(val)), z.number().min(300).max(900).nullable().optional()),
     has_credit_history: z.boolean().default(true)
-})
+}).refine(data => {
+    if (data.has_credit_history && (data.credit_score === null || data.credit_score === undefined)) {
+        return false;
+    }
+    return true;
+}, {
+    message: "Credit Score is required if history exists",
+    path: ["credit_score"]
+});
 
 interface NewApplicationFormProps {
     onPredictionComplete: (result: any) => void

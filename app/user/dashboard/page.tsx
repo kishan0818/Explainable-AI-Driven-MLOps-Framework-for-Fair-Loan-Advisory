@@ -1,61 +1,46 @@
 "use client"
 
-import type React from "react"
-import { Chatbot } from "@/components/chatbot"
-import { ModelPrediction } from "@/components/model-integration"
-import { NewApplicationForm } from "@/components/new-application-form"
-import { RulesAndSchemesEngine } from "@/components/rules-engine"
-import { useState } from "react"
-import { Navbar } from "@/components/navbar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import {
-  FileText,
-  PlusCircle,
-  BookOpen,
-  User,
-  BarChart3,
-  CheckCircle,
-  Clock,
-  XCircle,
-  AlertCircle,
-  MessageCircle,
-} from "lucide-react"
-
+import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
-import { useEffect, useCallback } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Navbar } from "@/components/navbar"
+import { Chatbot } from "@/components/chatbot"
+import { PlusCircle, Loader2, ArrowRight, Wallet, Building2, CheckCircle2, AlertTriangle, XCircle, Eye, BookOpen } from "lucide-react"
+import { NewApplicationForm } from "@/components/new-application-form"
+import { ModelPrediction } from "@/components/model-integration"
+import { RulesAndSchemesEngine } from "@/components/rules-engine"
 
 export default function UserDashboard() {
-  const [view, setView] = useState<'list' | 'new' | 'detail' | 'rules'>('list')
-  const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
-  const [tempApp, setTempApp] = useState<any>(null) // Phase 3 Fix: Immediate Result
-
+  const router = useRouter()
+  const [userEmail, setUserEmail] = useState("")
   const [applications, setApplications] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [view, setView] = useState<'list' | 'new' | 'rules' | 'detail'>('list')
+  const [selectedApp, setSelectedApp] = useState<any | null>(null)
   const [referenceData, setReferenceData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [tempApp, setTempApp] = useState<any | null>(null) // State for immediate result after creation
   const [stats, setStats] = useState({ total: 0, approved: 0, rejected: 0 })
-  const [userEmail, setUserEmail] = useState<string>("")
 
-  // Fetch Logic
   const fetchDashboardData = useCallback(async () => {
-    try {
-      setLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setUserEmail(user.email || "")
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    setUserEmail(user.email || "")
 
+    try {
+      setIsLoading(true)
       // Parallel Fetch: Apps + Reference Data
       const [appRes, refRes] = await Promise.all([
         supabase
           .from('loan_applications')
           .select(`
-            *,
-            analysis_results!analysis_results_application_id_fkey ( * ),
-            bank_suitability ( bank_name, suitability, reason ),
-            scheme_recommendations ( scheme_name, reason )
-          `)
+              *,
+              analysis_results!analysis_results_application_id_fkey ( * ),
+              bank_suitability ( * ),
+              scheme_recommendations ( * )
+            `)
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
 
@@ -69,21 +54,35 @@ export default function UserDashboard() {
       const formattedApps = appRes.data?.map(app => {
         const analysis = app.analysis_results?.[0]
         const mlProb = analysis?.ml_probability ?? 0.5
-        const prediction = mlProb > 0.5 ? 'approve' : 'reject'
+
+        // Phase 3 Fix: Use DB status as source of truth.
+        let finalStatus = (app.status === 'approve' || app.status === 'reject') ? app.status : (mlProb > 0.5 ? 'approve' : 'reject')
+
+        // If risk band is high, override to reject if not explicitly approved
+        if (analysis?.risk_band === 'high' && finalStatus !== 'approve') {
+          finalStatus = 'reject'
+        }
+
+        // Logic for Needs Review vs Rejected
+        let displayStatus = 'Needs Review'
+        if (finalStatus === 'approve') displayStatus = 'Approved'
+        if (finalStatus === 'reject') displayStatus = 'Rejected'
+        if (finalStatus === 'reject' && analysis?.risk_band !== 'high') displayStatus = 'Needs Review'
 
         return {
           id: app.id,
           displayId: app.id.slice(0, 8).toUpperCase(),
           type: app.loan_type?.replace('_', ' ') || 'Loan',
           amount: typeof app.loan_amount === 'number' ? `₹${app.loan_amount.toLocaleString()}` : app.loan_amount,
-          status: prediction,
+          status: finalStatus, // internal status
+          displayStatus: displayStatus, // UI Badge Text
           submittedDate: new Date(app.created_at).toLocaleDateString(),
 
-          // Full Data for Detail View
+          // Full Data for Detail View (Modal)
           fullData: {
             application_id: app.id,
-            loan_type: app.loan_type, // Crucial for Context Lookup
-            prediction: prediction,
+            loan_type: app.loan_type,
+            prediction: finalStatus,
             confidence: mlProb > 0.5 ? mlProb : (1 - mlProb),
             risk_band: analysis?.risk_band || 'medium',
             risk_score: analysis?.risk_score || 50,
@@ -91,23 +90,24 @@ export default function UserDashboard() {
             positive_factors: analysis?.positive_factors || [],
             decision_summary: analysis?.decision_summary,
             bank_suitability: app.bank_suitability || [],
-            schemes_suggested: app.scheme_recommendations || []
+            schemes: app.scheme_recommendations || [] // Schemes Logic Fix
           }
         }
       }) || []
 
       setApplications(formattedApps)
 
-      // Calculate Stats
-      const total = formattedApps.length
-      const approved = formattedApps.filter(a => a.status === 'approve').length
-      const rejected = formattedApps.filter(a => a.status === 'reject').length
-      setStats({ total, approved, rejected })
+      // Stats
+      setStats({
+        total: formattedApps.length,
+        approved: formattedApps.filter(a => a.displayStatus === 'Approved').length,
+        rejected: formattedApps.filter(a => a.displayStatus !== 'Approved').length
+      })
 
-    } catch (error) {
-      console.error("Error fetching data:", error)
+    } catch (e: any) {
+      console.error("Error fetching dashboard data", e)
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }, [])
 
@@ -115,196 +115,185 @@ export default function UserDashboard() {
     fetchDashboardData()
   }, [fetchDashboardData])
 
-  // Navigation Handlers
-  const handleViewDetail = (appId: string) => {
-    setSelectedAppId(appId)
-    setView('detail')
-  }
-
-  const handleCreateNew = () => {
-    setView('new')
+  const handleCreationSuccess = (newApp: any) => {
+    setTempApp(newApp) // Show the Result View immediately
+    fetchDashboardData() // Refresh list in bg
   }
 
   const handleBack = () => {
+    setTempApp(null)
+    setSelectedApp(null)
     setView('list')
-    setSelectedAppId(null)
-    setTempApp(null) // Clear temp result
   }
 
-  // UPDATED: Immediate Result Flow
-  const handleCreationSuccess = (newResult: any) => {
-    // Set the temporary result directly to show immediately
-    setTempApp(newResult)
+  const handleViewDetail = (app: any) => {
+    setSelectedApp(app)
     setView('detail')
-
-    // Refresh list in background so it's there when they go back
-    fetchDashboardData()
   }
 
-  // --- Render Views ---
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Approved':
+        return <Badge className="bg-success hover:bg-success/90 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Approved</Badge>
+      case 'Rejected':
+        return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> Rejected</Badge>
+      case 'Needs Review':
+        return <Badge className="bg-warning hover:bg-warning/90 text-black gap-1"><AlertTriangle className="w-3 h-3" /> Needs Review</Badge>
+      default:
+        return <Badge variant="secondary">{status}</Badge>
+    }
+  }
 
-  if (view === 'new') {
+  // Immediate Result View (Full Page as mostly distinct flow)
+  if (tempApp) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar title="New Application" userRole="Applicant" />
-        <div className="p-6 max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold">New Loan Application</h1>
-            <Button variant="ghost" onClick={handleBack}>Cancel</Button>
-          </div>
-          <NewApplicationForm onPredictionComplete={handleCreationSuccess} />
+        <Navbar title="Application Review" userRole="Applicant" />
+        <div className="container mx-auto p-6 max-w-5xl space-y-6">
+          <Button variant="ghost" onClick={handleBack} className="mb-4 pl-0 hover:bg-transparent">
+            <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard
+          </Button>
+          <ModelPrediction initialResult={tempApp} mode="view" referenceData={referenceData} />
         </div>
+        <Chatbot />
       </div>
     )
   }
 
-  if (view === 'rules') {
+  // Detail View (Full Page)
+  if (view === 'detail' && selectedApp) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar title="Rules Engine" userRole="Applicant" />
-        <div className="p-6 max-w-4xl mx-auto">
+        <Navbar title="Application Details" userRole="Applicant" />
+        <div className="container mx-auto p-6 max-w-5xl space-y-6 animate-in fade-in">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold">Rules & Schemes Reference</h1>
-            <Button variant="ghost" onClick={handleBack}>Back to Dashboard</Button>
-          </div>
-          <RulesAndSchemesEngine referenceData={referenceData} />
-        </div>
-      </div>
-    )
-  }
-
-  if (view === 'detail') {
-    // Phase 3 Fix: Use tempApp if available (immediate result), else find in list
-    const selectedApp = tempApp || applications.find(a => a.id === selectedAppId)
-    // Normalize data: tempApp is raw result, list item might be wrapper with fullData
-    const resultToRender = selectedApp?.fullData || selectedApp
-
-    return (
-      <div className="min-h-screen bg-background">
-        <Navbar title="Advisor Analysis" userRole="Applicant" />
-        <div className="p-6 max-w-5xl mx-auto space-y-6">
-          <div className="flex items-center justify-between">
             <div>
-              <Button variant="ghost" className="pl-0 hover:bg-transparent" onClick={handleBack}>
-                ← Back to Dashboard
+              <Button variant="ghost" onClick={handleBack} className="mb-2 pl-0 hover:bg-transparent">
+                <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard
               </Button>
-              <h1 className="text-2xl font-bold mt-2">{resultToRender?.loan_type || 'Application'} Review</h1>
+              <h1 className="text-3xl font-bold capitalize">{selectedApp.type} Application</h1>
+              <p className="text-muted-foreground">ID: {selectedApp.displayId} • Submitted on {selectedApp.submittedDate}</p>
             </div>
-            <Button onClick={handleCreateNew}>Start New Application</Button>
+            {getStatusBadge(selectedApp.displayStatus)}
           </div>
 
-          {resultToRender ? (
-            <ModelPrediction
-              initialResult={resultToRender}
-              mode="view"
-              referenceData={referenceData} // Pass Global Context
-            />
-          ) : (
-            <div className="text-center p-8">Loading application details...</div>
-          )}
+          <ModelPrediction
+            initialResult={{
+              ...selectedApp.fullData,
+              application_id: selectedApp.id,
+              schemes: selectedApp.fullData.schemes
+            }}
+            mode="view"
+            referenceData={referenceData}
+          />
         </div>
+        <Chatbot />
       </div>
     )
   }
 
-
-  // List View (Default)
   return (
     <div className="min-h-screen bg-background">
       <Navbar title="My Dashboard" userRole="Applicant" />
-      <div className="p-6 max-w-6xl mx-auto space-y-8">
+      <div className="container mx-auto p-6 max-w-6xl space-y-8 animate-in fade-in">
 
-        {/* Header Stats */}
-        <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-end">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Welcome Back</h1>
-            <p className="text-muted-foreground">Track your applications and explore schemes.</p>
+            <h1 className="text-3xl font-bold tracking-tight">Welcome Back</h1>
+            <p className="text-muted-foreground mt-1">Track your applications and explore schemes.</p>
           </div>
           <div className="flex gap-3">
-            <Button onClick={() => setView('rules')} variant="outline">
-              <BookOpen className="w-4 h-4 mr-2" /> View Rules
+            <Button variant="outline" onClick={() => setView('rules')}>
+              <BookOpen className="w-4 h-4 mr-2" /> View Government Rules & Schemes
             </Button>
-            <Button onClick={handleCreateNew} className="bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all">
+            <Button onClick={() => setView('new')}>
               <PlusCircle className="w-4 h-4 mr-2" /> New Application
             </Button>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-3 gap-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-muted-foreground text-sm font-medium uppercase tracking-wider">Total</div>
-              <div className="text-3xl font-bold mt-2">{stats.total}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 border-l-4 border-l-success">
-              <div className="text-success text-sm font-medium uppercase tracking-wider">Approved</div>
-              <div className="text-3xl font-bold mt-2">{stats.approved}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 border-l-4 border-l-destructive">
-              <div className="text-destructive text-sm font-medium uppercase tracking-wider">Rejected</div>
-              <div className="text-3xl font-bold mt-2">{stats.rejected}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Applications List */}
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Your Applications</h2>
-          <div className="space-y-4">
-            {loading ? (
-              <div className="text-center py-10 text-muted-foreground">Loading applications...</div>
-            ) : applications.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="py-12 text-center">
-                  <div className="mb-4 text-muted-foreground">No applications submitted yet.</div>
-                  <Button onClick={handleCreateNew}>Submit your first application</Button>
-                </CardContent>
+        {view === 'rules' ? (
+          <div className="space-y-6">
+            <Button variant="ghost" onClick={() => setView('list')} className="pl-0"><ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard</Button>
+            <RulesAndSchemesEngine referenceData={referenceData} />
+          </div>
+        ) : view === 'new' ? (
+          <div className="space-y-6">
+            <Button variant="ghost" onClick={() => setView('list')} className="pl-0"><ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard</Button>
+            <NewApplicationForm onPredictionComplete={handleCreationSuccess} />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">TOTAL</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-bold">{stats.total}</div></CardContent>
               </Card>
-            ) : (
-              applications.map(app => (
-                <Card
-                  key={app.id}
-                  className="hover:shadow-md transition-all cursor-pointer group border-l-4 items-center"
-                  style={{ borderLeftColor: app.status === 'approve' ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }}
-                  onClick={() => handleViewDetail(app.id)}
-                >
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div className="flex flex-col md:flex-row md:items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                        {app.status === 'approve' ? <CheckCircle className="text-success" /> : <XCircle className="text-destructive" />}
+              <Card className="border-l-4 border-l-success shadow-sm">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-success">APPROVED</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-bold">{stats.approved}</div></CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-destructive shadow-sm">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-destructive">REJECTED / REVIEW</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-bold">{stats.rejected}</div></CardContent>
+              </Card>
+            </div>
+
+            {/* Application List */}
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Your Applications</h2>
+              {isLoading ? (
+                <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+              ) : applications.length > 0 ? (
+                <div className="grid gap-3">
+                  {applications.map((app) => (
+                    <div
+                      key={app.id}
+                      className="group flex flex-col md:flex-row items-center justify-between p-4 bg-card border rounded-lg hover:border-primary/40 hover:shadow-md transition-all cursor-pointer"
+                      onClick={() => handleViewDetail(app)}
+                    >
+                      {/* Left Side: Details */}
+                      <div className="flex items-center gap-6 w-full md:w-auto">
+                        <div className="p-3 bg-primary/10 rounded-full text-primary shrink-0">
+                          {app.type.toLowerCase().includes('home') ? <Building2 className="w-5 h-5" /> :
+                            app.type.toLowerCase().includes('agriculture') ? <Wallet className="w-5 h-5" /> :
+                              <Wallet className="w-5 h-5" />}
+                        </div>
+                        <div className="min-w-[150px]">
+                          <div className="font-semibold text-lg capitalize">{app.type}</div>
+                          <div className="text-sm text-muted-foreground font-mono">{app.displayId}</div>
+                        </div>
+                        <div className="hidden md:block h-8 w-[1px] bg-border mx-2"></div>
+                        <div className="font-semibold text-lg text-foreground/80 min-w-[100px]">
+                          {app.amount}
+                        </div>
                       </div>
-                      <div>
-                        <div className="font-semibold text-lg capitalize">{app.type}</div>
-                        <div className="text-sm text-muted-foreground">ID: {app.displayId} • {app.submittedDate}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <div className="font-bold">{app.amount}</div>
-                        <Badge variant={app.status === 'approve' ? 'default' : 'destructive'}>
-                          {app.status === 'approve' ? 'APPROVED' : 'REJECTED'}
-                        </Badge>
-                      </div>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon">
-                          <FileText className="w-4 h-4" />
+
+                      {/* Right Side: Status and Action */}
+                      <div className="flex items-center gap-6 w-full md:w-auto mt-4 md:mt-0 justify-between md:justify-end">
+                        {getStatusBadge(app.displayStatus)}
+                        <Button variant="outline" size="sm" className="gap-2 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                          View Details <Eye className="w-4 h-4 ml-1" />
                         </Button>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center p-12 border rounded-lg bg-muted/20 border-dashed">
+                  <h3 className="text-lg font-medium">No applications found</h3>
+                  <p className="text-muted-foreground mb-4">Start your first loan application to see AI recommendations</p>
+                  <Button onClick={() => setView('new')}>Start New Application</Button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
       </div>
       <Chatbot />
     </div>
   )
 }
-

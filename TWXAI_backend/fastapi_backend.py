@@ -485,15 +485,19 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
                 # Category Match
                 scheme_cat = scheme.get("category", "").lower() 
                 app_cat_map = {
-                    "business": "business", "msme_loan": "business",
-                    "agriculture_loan": "agriculture", 
-                    "home_loan": "housing", "education_loan": "education"
+                    "business": "enterprise", 
+                    "msme_loan": "enterprise",
+                    "agriculture_loan": "agricultur", # Matches "Agricultural Credit", "Agricultural Insurance"
+                    "home_loan": "housing", # Matches "Housing Finance..."
+                    "education_loan": "education", # Matches "Education Loans"
+                    "personal_loan": "urban livelihood" # Matches "Urban Livelihood..." (NULM)
                 }
                 required_cat = app_cat_map.get(canonical_loan_type, "general")
                 
-                if scheme_cat == required_cat or scheme_cat == "general":
+                # Loose match: e.g. "enterprise" in "Enterprise Development"
+                if required_cat in scheme_cat or scheme_cat == "general":
                     is_match = True
-                    match_reason = "Matches your loan category"
+                    match_reason = f"Matches your loan category ({required_cat})"
 
                 # If match, add it
                 if is_match:
@@ -505,9 +509,10 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
                     }
                     scheme_results.append(api_rec)
                     
-                    # For DB Persistence (Schema likely app_id, scheme_name, reason)
+                    # For DB Persistence (Schema likely app_id, scheme_id, scheme_name, reason)
                     db_rec = {
                         "application_id": app_id,
+                        "scheme_id": scheme.get("id"), # Fix: Include scheme_id
                         "scheme_name": scheme.get("name", "Unknown Scheme"),
                         "reason": match_reason
                     }
@@ -521,23 +526,28 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         "risk_score": float(risk_score),
         "risk_band": risk_band,
         "ml_probability": float(prob_approve),
-        "decision_summary": f"Decided as {final_decision.upper()} based on {len(bank_results)} bank matches",
+        "decision_summary": f"{final_decision}", # Store simple decision for now or kept detailed. User asked for distinct status.
         "positive_factors": json.loads(json.dumps(pos_factors)),
         "negative_factors": json.loads(json.dumps(neg_factors))
     }
     supabase.table("analysis_results").insert(analysis_data).execute()
+
+    # CRITICAL FIX: Update loan_applications status to match final decision
+    # This ensures Dashboard and DB are in sync with the logic that considers Bank Suitability
+    supabase.table("loan_applications").update({"status": final_decision}).eq("id", app_id).execute()
 
     return {
         "application_id": app_id,
         "loan_type": canonical_loan_type,
         "risk_score": float(risk_score),
         "risk_band": risk_band,
-        "prediction": final_decision,
-        "confidence": float(prob_approve if final_decision == "approve" else prob_reject),
+        "prediction": final_decision, # Return the calculated decision (including bank logic)
+        "confidence": float(prob_approve),
         "positive_factors": pos_factors,
         "negative_factors": neg_factors,
         "bank_suitability": bank_results,
         "schemes_suggested": scheme_results,
+        "decision_summary": analysis_data["decision_summary"],
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
