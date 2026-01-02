@@ -52,14 +52,55 @@ label_encoders = None
 pca = None
 rules_data = {}
 schemes_data = {}
+bank_loan_data = {}
 
-# --- Pydantic Models ---
+# ... (models) ...
+
+# --- ML & Logic Helpers ---
+def load_ml_components():
+    global model, feature_selector, label_encoders, pca, rules_data, schemes_data, bank_loan_data
+    try:
+        model_dir = "results_rf_smote_controlled_pca1_wocs//models"
+        # Fix path if double slash is issue, standardizing to os.path.join
+        base_dir = os.path.join("results_rf_smote_controlled_pca1_wocs", "models")
+        
+        if not os.path.exists(base_dir):
+            base_dir = "models" # Fallback if user moved it
+
+        model = joblib.load(os.path.join(base_dir, "rf_smote_model.joblib"))
+        feature_selector = joblib.load(os.path.join(base_dir, "feature_selector.joblib"))
+        label_encoders = joblib.load(os.path.join(base_dir, "label_encoders.joblib"))
+        if os.path.exists(os.path.join(base_dir, "pca.joblib")):
+            pca = joblib.load(os.path.join(base_dir, "pca.joblib"))
+            
+        # Load JSONs
+        with open("rules.json", 'r') as f:
+            rules_data = json.load(f)
+        with open("schemes.json", 'r') as f:
+            schemes_data = json.load(f)
+            
+        # Phase 2: Load Bank Loan Data
+        bank_data_path = os.path.join("data", "bank_loan_data.json")
+        if os.path.exists(bank_data_path):
+             with open(bank_data_path, 'r') as f:
+                bank_loan_data = json.load(f)
+        else:
+             logger.warning(f"Bank Data not found at {bank_data_path}")
+            
+        return True
+    except Exception as e:
+        logger.error(f"ML Loading Error: {e}")
+        return False
+
+# ... (preprocess) ..
+
+# --- Routes moved to bottom ---
 class LoanApplication(BaseModel):
     name: str = Field(..., description="Applicant name")
     age: int = Field(..., ge=18, le=80, description="Applicant age")
     income: float = Field(..., gt=0, description="Monthly income")
     loan_amount: float = Field(..., gt=0, description="Requested loan amount")
-    loan_type: str = Field(..., description="Type of loan (home, personal, education, msme, agriculture)")
+    loan_type: str = Field(..., description="Type of loan (home_loan, personal_loan, education_loan, msme_loan, agriculture_loan)")
     employment_type: str = Field(..., description="Employment type (salaried, self_employed, business)")
     existing_emi: float = Field(0, ge=0, description="Existing monthly EMI obligations")
     credit_score: Optional[int] = Field(None, ge=300, le=900, description="CIBIL/Credit Score")
@@ -150,32 +191,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 # --- ML & Logic Helpers ---
-def load_ml_components():
-    global model, feature_selector, label_encoders, pca, rules_data, schemes_data
-    try:
-        model_dir = "results_rf_smote_controlled_pca1_wocs//models"
-        # Fix path if double slash is issue, standardizing to os.path.join
-        base_dir = os.path.join("results_rf_smote_controlled_pca1_wocs", "models")
-        
-        if not os.path.exists(base_dir):
-            base_dir = "models" # Fallback if user moved it
-
-        model = joblib.load(os.path.join(base_dir, "rf_smote_model.joblib"))
-        feature_selector = joblib.load(os.path.join(base_dir, "feature_selector.joblib"))
-        label_encoders = joblib.load(os.path.join(base_dir, "label_encoders.joblib"))
-        if os.path.exists(os.path.join(base_dir, "pca.joblib")):
-            pca = joblib.load(os.path.join(base_dir, "pca.joblib"))
-            
-        # Load JSONs
-        with open("rules.json", 'r') as f:
-            rules_data = json.load(f)
-        with open("schemes.json", 'r') as f:
-            schemes_data = json.load(f)
-            
-        return True
-    except Exception as e:
-        logger.error(f"ML Loading Error: {e}")
-        return False
+# load_ml_components defined at top of file
 
 def preprocess_application(app: LoanApplication) -> pd.DataFrame:
     # Logic matching training data schema
@@ -284,6 +300,14 @@ async def validation_exception_handler(request, exc):
 def health():
     return {"status": "active", "db": "supabase_connected" if supabase else "failed", "model": "loaded" if model else "failed"}
 
+@app.get("/reference-data")
+def get_reference_data():
+    """Serve bank loan data and schemes for frontend usage"""
+    return {
+        "bank_data": bank_loan_data,
+        "schemes": schemes_data.get("schemes", [])
+    }
+
 @app.post("/predict", response_model=ModelPrediction)
 async def predict(application: LoanApplication, user_payload: dict = Depends(verify_token)):
     user_id = user_payload.get("sub")
@@ -292,37 +316,45 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
     try:
         user_email = user_payload.get("email")
         # Upsert user to ensure they exist for the FK constraint
-        # is_active=True by default for new syncs
         user_data = {
             "id": user_id,
             "email": user_email,
             "is_active": True
-            # Add role if needed, defaulting to applicant/user based on system design? 
-            # System seems to have removed roles, but if table needs it, defaults might handle it.
-            # Based on previous code, likely minimal schema.
         }
         supabase.table("users").upsert(user_data).execute()
     except Exception as e:
         logger.error(f"User Sync Error (Non-critical if exists?): {e}")
-        # If this fails, the next insert might fail too, but let's proceed or raise?
-        # If sync fails, FK will fail. Better to log and let FK fail or raise 500.
-        # But upsert is robust.
         pass
+
+    # --- Phase 3 Fix: Normalize Loan Type ---
+    LOAN_TYPE_MAP = {
+        "personal": "personal_loan",
+        "Personal Loan": "personal_loan",
+        "home": "home_loan",
+        "Home Loan": "home_loan",
+        "education": "education_loan",
+        "Education Loan": "education_loan",
+        "msme": "msme_loan",
+        "MSME": "msme_loan",
+        "agriculture": "agriculture_loan",
+        "Agriculture Loan": "agriculture_loan"
+    }
+    
+    canonical_loan_type = LOAN_TYPE_MAP.get(application.loan_type, application.loan_type)
+    # ----------------------------------------
 
     # 2. Insert into loan_applications
     dti_val = (application.existing_emi / application.income) if application.income > 0 else 0
-    # if application.dti_ratio is not None: dti_val = application.dti_ratio - REMOVED
     
     app_data = {
         "user_id": user_id,
-        "loan_type": application.loan_type,
+        "loan_type": canonical_loan_type, # Use canonical
         "income": application.income,
         "loan_amount": application.loan_amount,
         "employment_type": application.employment_type if application.employment_type in ['salaried', 'self_employed', 'business'] else 'salaried',
         "existing_emi": application.existing_emi,
         "credit_score": application.credit_score,
-        # "dti" not in schema provided by user, only computed for analysis
-        # Schema: id, user_id, loan_type, income, loan_amount, employment_type, existing_emi, credit_score, created_at
+        "status": "processed" # Mark as processed immediately
     }
     
     try:
@@ -345,6 +377,14 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         prob_approve = 0.5
         prob_reject = 0.5
 
+    # Logic Fix: Penalize confidence if no Credit Score (User Request)
+    if application.credit_score is None:
+        # Reduce approval probability by 10% to reflect uncertainty
+        if prob_approve > 0.5:
+             prob_approve *= 0.9
+             prob_reject = 1.0 - prob_approve
+    
+    
     risk_score = prob_reject * 100
     if risk_score < 30: risk_band = "low"
     elif risk_score < 70: risk_band = "medium"
@@ -352,132 +392,154 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
 
     pos_factors, neg_factors = get_risk_factors(application, prob_approve, dti_val)
     
-    # 3. Insert Analysis Results
+    # 4. Bank Suitability (Phase 3 Fix: Always Run Logic)
+    bank_results = []
+    has_high_suitability_bank = False
+    
+    try:
+        # Find matching loan type using CANONICAL ID
+        loan_type_data = next((item for item in bank_loan_data.get("loan_types", []) 
+                               if item["id"] == canonical_loan_type), None)
+        
+        if loan_type_data and "bank_comparison" in loan_type_data:
+            banks = loan_type_data["bank_comparison"]
+            
+            for bank in banks:
+                suitability = "medium"
+                reasons = []
+                
+                # Logic: Bank Specific Rules vs User Profile
+                
+                # A. Credit Score Rules
+                bank_name_lower = bank['bank'].lower()
+                is_top_tier = bank_name_lower in ['sbi', 'hdfc bank', 'icici bank']
+                
+                if application.credit_score:
+                    if application.credit_score >= 750:
+                        reasons.append("Excellent credit score")
+                        if risk_band == "low": suitability = "high"
+                    elif application.credit_score < 650:
+                        suitability = "low"
+                        reasons.append("Credit score below preferred threshold")
+                else:
+                    # No Credit History
+                    if is_top_tier:
+                         suitability = "low"
+                         reasons.append("Credit history typically required")
+                    else:
+                         reasons.append("May verify alternate income proofs")
+
+                # B. Risk Band Impact
+                if risk_band == "high":
+                    suitability = "low"
+                    reasons.append("High risk profile")
+                elif risk_band == "low" and not reasons:
+                    suitability = "high"
+                    reasons.append("Strong profile match")
+
+                # C. DTI Impact
+                if dti_val > 0.5:
+                     suitability = "low"
+                     reasons.append("High DTI ratio")
+
+                # Dedupe Reasons
+                reasons = list(set(reasons))
+                if not reasons: reasons.append("Standard eligibility met")
+                
+                if suitability == "high" or suitability == "medium":
+                    has_high_suitability_bank = True
+
+                bank_entry = {
+                    "application_id": app_id,
+                    "bank_name": bank['bank'],
+                    "suitability": suitability,
+                    "reason": "; ".join(reasons)
+                }
+                bank_results.append(bank_entry)
+                supabase.table("bank_suitability").insert(bank_entry).execute()
+        else:
+             logger.warning(f"Loan Type {canonical_loan_type} not found in bank_loan_data")
+             
+    except Exception as e:
+        logger.error(f"Bank Logic Error: {e}")
+
+    # 5. Determine Final Decision & Schemes
+    # Decision is APPROVE if at least one bank is viable, else REVIEW/REJECT
+    
+    final_decision = "approve" if has_high_suitability_bank else "reject"
+    
+    # If ML is super confident about rejection, override (but keep banks visible)
+    if prob_approve < 0.2: 
+        final_decision = "reject"
+    
+    # 6. Scheme Recommendations (If Rejected or High Risk)
+    scheme_results = []
+    if final_decision != "approve" or risk_band == "high" or application.credit_score is None:
+        try:
+            schemes = schemes_data.get("schemes", [])
+            for scheme in schemes:
+                # Basic matching logic
+                is_match = False
+                match_reason = ""
+                
+                # Category Match
+                scheme_cat = scheme.get("category", "").lower() 
+                app_cat_map = {
+                    "business": "business", "msme_loan": "business",
+                    "agriculture_loan": "agriculture", 
+                    "home_loan": "housing", "education_loan": "education"
+                }
+                required_cat = app_cat_map.get(canonical_loan_type, "general")
+                
+                if scheme_cat == required_cat or scheme_cat == "general":
+                    is_match = True
+                    match_reason = "Matches your loan category"
+
+                # If match, add it
+                if is_match:
+                    # For API Response (Pydantic Model)
+                    api_rec = {
+                        "scheme_id": scheme.get("id", "generic"),
+                        "scheme_name": scheme.get("name", "Unknown Scheme"),
+                        "reason": match_reason
+                    }
+                    scheme_results.append(api_rec)
+                    
+                    # For DB Persistence (Schema likely app_id, scheme_name, reason)
+                    db_rec = {
+                        "application_id": app_id,
+                        "scheme_name": scheme.get("name", "Unknown Scheme"),
+                        "reason": match_reason
+                    }
+                    supabase.table("scheme_recommendations").insert(db_rec).execute()
+        except Exception as e:
+            logger.error(f"Scheme insert error: {e}")
+
+    # 7. Insert Analysis Results (Source of Truth)
     analysis_data = {
         "application_id": app_id,
         "risk_score": float(risk_score),
         "risk_band": risk_band,
         "ml_probability": float(prob_approve),
-        "decision_summary": f"Application risk assessed as {risk_band}",
-        "positive_factors": json.loads(json.dumps(pos_factors)), # Ensure serializable
+        "decision_summary": f"Decided as {final_decision.upper()} based on {len(bank_results)} bank matches",
+        "positive_factors": json.loads(json.dumps(pos_factors)),
         "negative_factors": json.loads(json.dumps(neg_factors))
     }
     supabase.table("analysis_results").insert(analysis_data).execute()
 
-    # 4. Bank Suitability
-    bank_results = []
-    try:
-        banks_resp = supabase.table("bank_profiles").select("*").execute()
-        banks = banks_resp.data
-        
-        for bank in banks:
-            suitability = "medium"
-            reasons = []
-            
-            # Risk Appetite Logic
-            if bank['risk_appetite'] == 'low' and risk_band == 'high':
-                suitability = "low"
-                reasons.append("Bank has low risk appetite")
-            elif bank['risk_appetite'] == 'high' and risk_band == 'high':
-                suitability = "medium" # Willing to take risk
-                reasons.append("Bank accepts higher risk profiles")
-                
-            # CIBIL Logic
-            if application.credit_score and bank['min_cibil_preference']:
-                if application.credit_score < bank['min_cibil_preference']:
-                    suitability = "low"
-                    reasons.append(f"Score below bank minimum ({bank['min_cibil_preference']})")
-            
-            # DTI Logic
-            if bank['max_dti']:
-                if (dti_val * 100) > bank['max_dti']:
-                    suitability = "low"
-                    reasons.append(f"DTI exceeds bank limit ({bank['max_dti']}%)")
-            
-            if not reasons:
-                suitability = "high"
-                reasons.append("Profile matches bank criteria")
-                
-            bank_entry = {
-                "application_id": app_id,
-                "bank_name": bank['bank_name'],
-                "suitability": suitability,
-                "reason": "; ".join(reasons)
-            }
-            bank_results.append(BankSuitabilityResult(**bank_entry))
-            # Insert logic handled in bulk? Or loop. Loop is safer for now.
-            # Supabase usually supports bulk, but let's do simple.
-            # Reuse bank_entry for DB insert (remove extra fields if any? No, matches schema except ID)
-            supabase.table("bank_suitability").insert(bank_entry).execute()
-            
-    except Exception as e:
-        logger.error(f"Bank logic error: {e}")
-
-    # 5. Scheme Suggestions
-    scheme_results = []
-    schemes_to_insert = []
-    
-    # Only suggest if Rejected or High Risk? Or always? User said "Match schemes...". Usually for rejection/assistance.
-    # Let's suggest matching schemes regardless, advisory.
-    
-    for scheme in schemes_data.get("schemes", []):
-        is_match = False
-        reason = ""
-        
-        # Simple Logic based on existing json structure
-        s_id = scheme.get("id")
-        
-        # Example logic adaptation
-        if s_id == "stand_up_india":
-            if application.loan_type == "business" and (application.caste_category in ['sc','st'] or application.gender == 'female'):
-                 is_match = True
-                 reason = "Eligible due to SC/ST or Female Entrepreneur status"
-        elif s_id == "pmay_urban":
-             if application.loan_type == "home" and application.income < 1800000:
-                 is_match = True
-                 reason = "Eligible for housing subsidy based on income"
-        elif s_id == "pm_vidyalaxmi":
-             if application.loan_type == "education":
-                 is_match = True
-                 reason = "Dedicated education loan scheme"
-        elif s_id == "mudra": # Assuming ID
-             if application.loan_type == "business" and application.loan_amount < 1000000:
-                 is_match = True
-                 reason = "Micro-enterprise loan eligibility"
-        
-        # Generic fallback
-        if not is_match and scheme.get("category") == "General":
-            is_match = True
-            reason = "General eligibility"
-            
-        if is_match:
-            rec = {
-                "application_id": app_id,
-                "scheme_id": s_id,
-                "scheme_name": scheme.get("name"),
-                "reason": reason
-            }
-            scheme_results.append(SchemeRecommendationResult(**rec))
-            schemes_to_insert.append(rec)
-            
-    if schemes_to_insert:
-        try:
-             supabase.table("scheme_recommendations").insert(schemes_to_insert).execute()
-        except Exception as e:
-             logger.error(f"Scheme insert error: {e}")
-
-    return ModelPrediction(
-        application_id=str(app_id),
-        risk_score=risk_score,
-        risk_band=risk_band,
-        prediction="approve" if prob_approve > 0.5 else "reject",
-        confidence=float(abs(prob_approve - 0.5) * 2),
-        positive_factors=pos_factors,
-        negative_factors=neg_factors,
-        bank_suitability=bank_results,
-        schemes_suggested=scheme_results,
-        timestamp=datetime.now(timezone.utc).isoformat()
-    )
+    return {
+        "application_id": app_id,
+        "loan_type": canonical_loan_type,
+        "risk_score": float(risk_score),
+        "risk_band": risk_band,
+        "prediction": final_decision,
+        "confidence": float(prob_approve if final_decision == "approve" else prob_reject),
+        "positive_factors": pos_factors,
+        "negative_factors": neg_factors,
+        "bank_suitability": bank_results,
+        "schemes_suggested": scheme_results,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 if __name__ == "__main__":
     uvicorn.run("fastapi_backend:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,0 +1,686 @@
+{
+  "loan_types": [
+    {
+      "id": "personal_loan",
+      "name": "Personal Loan",
+      "purpose": "Unsecured loan for personal expenses, emergencies, and financial needs",
+      "best_for": [
+        "Salaried individuals with stable income",
+        "Self-employed professionals",
+        "Emergency medical or personal expenses",
+        "Debt consolidation",
+        "Wedding or travel expenses"
+      ],
+      "typical_eligibility": {
+        "income": "₹15,000 - ₹25,000+ per month (varies by bank)",
+        "age": "21-60 years",
+        "credit_score": "Good CIBIL score required (typically 650+)",
+        "employment": [
+          "Salaried (minimum 1-2 years work experience)",
+          "Self-employed with stable income"
+        ],
+        "other_criteria": [
+          "EMI to Net Monthly Income ratio ≤65%",
+          "Minimum 1 year current employer (for salaried)",
+          "Post-EMI balance around ₹25,000 (HDFC)"
+        ]
+      },
+      "documents_required": [
+        "PAN Card",
+        "Aadhaar Card",
+        "Salary Slips (last 3-6 months)",
+        "Bank Statements (last 6 months)",
+        "Form-16 or ITR (for self-employed)",
+        "Address Proof (utility bills, passport)",
+        "Employment proof"
+      ],
+      "bank_comparison": [
+        {
+          "bank": "SBI",
+          "interest_range": "10.05% - 15.05% p.a.",
+          "loan_amount": "Up to ₹35 lakh",
+          "tenure": "Varies by scheme",
+          "processing_fees": "Up to 1.5% of loan amount + GST",
+          "remarks": "Income-based limits, pre-approved offers via YONO SBI"
+        },
+        {
+          "bank": "HDFC Bank",
+          "interest_range": "10.85% - 24.00% p.a.",
+          "loan_amount": "Up to ₹40 lakh",
+          "tenure": "Flexible tenure options",
+          "processing_fees": "Up to ₹6,500 + GST",
+          "remarks": "Quick digital application, instant offers for existing customers"
+        },
+        {
+          "bank": "ICICI Bank",
+          "interest_range": "10.85% - 16.50% p.a.",
+          "loan_amount": "Up to ₹50 lakh",
+          "tenure": "12-84 months",
+          "processing_fees": "As per bank policy",
+          "remarks": "Flexible tenures, online/branch application"
+        },
+        {
+          "bank": "Axis Bank",
+          "interest_range": "9.99% - 22.00% p.a.",
+          "loan_amount": "Up to ₹40 lakh",
+          "tenure": "Up to 84 months",
+          "processing_fees": "As per scheme",
+          "remarks": "Competitive rates based on credit profile"
+        },
+        {
+          "bank": "PNB",
+          "interest_range": "From 10.05% p.a.",
+          "loan_amount": "Comparable to other PSU banks",
+          "tenure": "Standard tenures",
+          "processing_fees": "PSU bank norms",
+          "remarks": "PSU bank processing standards"
+        }
+      ]
+    },
+    {
+      "id": "home_loan",
+      "name": "Home Loan",
+      "purpose": "Loan for purchasing, constructing, or renovating residential property",
+      "best_for": [
+        "First-time home buyers",
+        "Property investors",
+        "Home construction projects",
+        "Home renovation and improvement",
+        "NRIs looking to invest in Indian property"
+      ],
+      "typical_eligibility": {
+        "income": "Stable income with repayment capacity",
+        "age": "18-65 years (varies by bank)",
+        "credit_score": "Good credit history required",
+        "employment": [
+          "Salaried employees",
+          "Self-employed individuals",
+          "Resident Indians",
+          "NRIs"
+        ],
+        "other_criteria": [
+          "Loan maturity typically not exceeding 70-75 years of age",
+          "Property valuation and legal clearance required",
+          "Stable income for EMI servicing"
+        ]
+      },
+      "documents_required": [
+        "PAN Card",
+        "Aadhaar Card",
+        "Income Proof (salary slips, ITR, bank statements)",
+        "Property documents (sale agreement, title deed)",
+        "Encumbrance Certificate",
+        "Property valuation report",
+        "KYC documents",
+        "Address proof"
+      ],
+      "bank_comparison": [
+        {
+          "bank": "SBI",
+          "interest_range": "External Benchmark/MCLR linked",
+          "loan_amount": "Up to ₹10 crore+ (based on credit profile and property value)",
+          "tenure": "Up to 30 years",
+          "processing_fees": "As per scheme",
+          "remarks": "Apply online via SBI portal or branch"
+        },
+        {
+          "bank": "HDFC Bank",
+          "interest_range": "External Benchmark linked",
+          "loan_amount": "Up to ₹10 crore",
+          "tenure": "Up to 30 years",
+          "processing_fees": "Low processing fee",
+          "remarks": "Competitive rates, online/branch application"
+        },
+        {
+          "bank": "ICICI Bank",
+          "interest_range": "External Benchmark linked",
+          "loan_amount": "Up to 80-90% of property value",
+          "tenure": "Long tenure options",
+          "processing_fees": "As per policy",
+          "remarks": "Standard lending practice for property financing"
+        },
+        {
+          "bank": "Axis Bank",
+          "interest_range": "Benchmark-linked",
+          "loan_amount": "Based on property value and credit",
+          "tenure": "Standard tenures",
+          "processing_fees": "As per scheme",
+          "remarks": "Age, income, and credit score based eligibility"
+        },
+        {
+          "bank": "PNB",
+          "interest_range": "RLLR/MCLR linked",
+          "loan_amount": "Up to 80-90% financing of property value",
+          "tenure": "Standard tenures",
+          "processing_fees": "PSU norms",
+          "remarks": "Adjusted by RBI repo rate changes"
+        }
+      ]
+    },
+    {
+      "id": "education_loan",
+      "name": "Education Loan",
+      "purpose": "Loan for financing higher education in India or abroad",
+      "best_for": [
+        "Students pursuing UG/PG/professional courses",
+        "International education programs",
+        "Professional courses and certifications",
+        "Students with limited family income"
+      ],
+      "typical_eligibility": {
+        "income": "Co-applicant income considered",
+        "age": "Student admitted to approved course",
+        "credit_score": "Co-applicant credit history evaluated",
+        "employment": [
+          "Student with admission to approved institution",
+          "Parent/Guardian as mandatory co-applicant"
+        ],
+        "other_criteria": [
+          "Admission to approved UG/PG/professional courses",
+          "Domestic or international institutions",
+          "Co-applicant (usually parent/guardian) mandatory"
+        ]
+      },
+      "documents_required": [
+        "Admission letter from institution",
+        "Fee structure and course details",
+        "KYC documents (PAN, Aadhaar)",
+        "Co-applicant income proof",
+        "Bank statements",
+        "Collateral documents (if loan amount is high)",
+        "Academic records"
+      ],
+      "bank_comparison": [
+        {
+          "bank": "SBI",
+          "interest_range": "7.15% - 10.15% p.a.",
+          "loan_amount": "Up to ₹50 lakh+ (Global Edu-Vantage for international studies)",
+          "tenure": "Up to 15 years after course completion with moratorium",
+          "processing_fees": "Minimal/Nil",
+          "remarks": "Flexible repayment with moratorium period during study"
+        },
+        {
+          "bank": "HDFC Bank",
+          "interest_range": "As per scheme",
+          "loan_amount": "For approved institutes",
+          "tenure": "Standard education loan tenures",
+          "processing_fees": "Low",
+          "remarks": "Covers approved domestic and international institutions"
+        },
+        {
+          "bank": "ICICI Bank",
+          "interest_range": "As per policy",
+          "loan_amount": "For Indian and abroad studies",
+          "tenure": "Standard tenures",
+          "processing_fees": "As applicable",
+          "remarks": "Requires co-applicant documentation"
+        },
+        {
+          "bank": "Axis Bank",
+          "interest_range": "As per scheme",
+          "loan_amount": "For approved courses",
+          "tenure": "Standard tenures",
+          "processing_fees": "Low",
+          "remarks": "Branch application process"
+        },
+        {
+          "bank": "PNB",
+          "interest_range": "As per PSU norms",
+          "loan_amount": "For approved institutions/courses",
+          "tenure": "Standard tenures",
+          "processing_fees": "Low/PSU norms",
+          "remarks": "Co-applicant mandatory, branch application"
+        }
+      ]
+    },
+    {
+      "id": "business_loan",
+      "name": "Business Loan / MSME Loan",
+      "purpose": "Loan for working capital, business expansion, and MSME requirements",
+      "best_for": [
+        "Small and Medium Enterprises (SMEs)",
+        "MSMEs",
+        "Self-employed business owners",
+        "Business expansion projects",
+        "Working capital needs"
+      ],
+      "typical_eligibility": {
+        "income": "Minimum annual income (varies by bank)",
+        "age": "21-65 years",
+        "credit_score": "Good credit history and business vintage",
+        "employment": [
+          "Self-employed with valid business income proof",
+          "MSMEs with turnover proof",
+          "Business vintage typically 3+ years"
+        ],
+        "other_criteria": [
+          "Valid business registration",
+          "GST registration",
+          "ITR filing history",
+          "Business creditworthiness assessment"
+        ]
+      },
+      "documents_required": [
+        "PAN Card",
+        "Aadhaar Card",
+        "Business registration documents",
+        "GST returns",
+        "ITR (last 2-3 years)",
+        "Bank statements (business account)",
+        "Financial statements",
+        "Turnover proof",
+        "Business address proof"
+      ],
+      "bank_comparison": [
+        {
+          "bank": "SBI",
+          "interest_range": "Risk-based pricing",
+          "loan_amount": "Based on turnover and business needs",
+          "tenure": "Varies by scheme",
+          "processing_fees": "As per scheme",
+          "remarks": "For MSMEs with turnover proof, branch application"
+        },
+        {
+          "bank": "HDFC Bank",
+          "interest_range": "Risk-based pricing",
+          "loan_amount": "Working capital and expansion needs",
+          "tenure": "Flexible tenure",
+          "processing_fees": "As per scheme",
+          "remarks": "For self-employed aged 21-65, online/branch application"
+        },
+        {
+          "bank": "ICICI Bank",
+          "interest_range": "Risk-based pricing",
+          "loan_amount": "Based on business financials",
+          "tenure": "Standard tenures",
+          "processing_fees": "As per policy",
+          "remarks": "Business vintage 3+ years typically required"
+        },
+        {
+          "bank": "Axis Bank",
+          "interest_range": "Risk-based pricing",
+          "loan_amount": "For SME/MSME",
+          "tenure": "Flexible",
+          "processing_fees": "As per scheme",
+          "remarks": "Requires turnover proof and credit appraisal"
+        },
+        {
+          "bank": "PNB",
+          "interest_range": "PSU lending norms",
+          "loan_amount": "For MSMEs and self-employed",
+          "tenure": "Standard tenures",
+          "processing_fees": "PSU norms",
+          "remarks": "Credit guarantee scheme linkage possible"
+        }
+      ]
+    },
+    {
+      "id": "auto_loan",
+      "name": "Vehicle / Auto Loan",
+      "purpose": "Loan for financing purchase of new or used vehicles",
+      "best_for": [
+        "Purchasing new cars or two-wheelers",
+        "Buying used vehicles",
+        "Commercial vehicle purchase",
+        "Salaried and self-employed individuals"
+      ],
+      "typical_eligibility": {
+        "income": "Stable income with repayment capacity",
+        "age": "21+ years (varies by bank)",
+        "credit_score": "Good credit history",
+        "employment": [
+          "Salaried employees",
+          "Self-employed individuals"
+        ],
+        "other_criteria": [
+          "Income and employment stability",
+          "Vehicle age and model considerations",
+          "Down payment may be required"
+        ]
+      },
+      "documents_required": [
+        "KYC documents (PAN, Aadhaar)",
+        "Income proof (salary slips, ITR)",
+        "Bank statements",
+        "Vehicle quotation/invoice",
+        "Address proof",
+        "Employment proof"
+      ],
+      "bank_comparison": [
+        {
+          "bank": "SBI",
+          "interest_range": "8.65% - 10.50% p.a.",
+          "loan_amount": "Up to vehicle value",
+          "tenure": "Standard auto loan tenures",
+          "processing_fees": "Low",
+          "remarks": "Apply via dealer or branch"
+        },
+        {
+          "bank": "HDFC Bank",
+          "interest_range": "8.75% - 11.00% p.a.",
+          "loan_amount": "Based on vehicle value",
+          "tenure": "Flexible tenures",
+          "processing_fees": "As per scheme",
+          "remarks": "Online or dealer application, age 21+"
+        },
+        {
+          "bank": "ICICI Bank",
+          "interest_range": "8.75% - 11.25% p.a.",
+          "loan_amount": "New and used vehicles",
+          "tenure": "Standard tenures",
+          "processing_fees": "As per policy",
+          "remarks": "Requires stable income, vehicle quotation"
+        },
+        {
+          "bank": "Axis Bank",
+          "interest_range": "9.00% - 11.50% p.a.",
+          "loan_amount": "Up to 100% of car value for eligible applicants",
+          "tenure": "Flexible",
+          "processing_fees": "As per scheme",
+          "remarks": "Income stability required, dealer application"
+        },
+        {
+          "bank": "PNB",
+          "interest_range": "PSU rates",
+          "loan_amount": "Based on vehicle value",
+          "tenure": "Standard tenures",
+          "processing_fees": "Low/PSU norms",
+          "remarks": "Branch application with PSU norms"
+        }
+      ]
+    },
+    {
+      "id": "loan_against_property",
+      "name": "Loan Against Property (LAP)",
+      "purpose": "Secured loan using residential or commercial property as collateral",
+      "best_for": [
+        "Business expansion using property as collateral",
+        "Large personal financial needs",
+        "Debt consolidation with lower interest",
+        "Property owners seeking liquidity"
+      ],
+      "typical_eligibility": {
+        "income": "Stable income with property ownership",
+        "age": "Property owner with repayment capacity",
+        "credit_score": "Good credit history",
+        "employment": [
+          "Property owners (residential/commercial)",
+          "Salaried and self-employed"
+        ],
+        "other_criteria": [
+          "Clear property title",
+          "Property valuation",
+          "Loan typically 50-70% of property value"
+        ]
+      },
+      "documents_required": [
+        "Property documents (title deed, sale agreement)",
+        "Property valuation report",
+        "Income proof",
+        "KYC documents",
+        "Bank statements",
+        "Encumbrance Certificate"
+      ],
+      "bank_comparison": [
+        {
+          "bank": "SBI",
+          "interest_range": "9.50% - 11.50% p.a.",
+          "loan_amount": "Based on property value",
+          "tenure": "Standard LAP tenures",
+          "processing_fees": "As per scheme",
+          "remarks": "Property verification required"
+        },
+        {
+          "bank": "HDFC Bank",
+          "interest_range": "9.75% - 12.00% p.a.",
+          "loan_amount": "Residential/commercial property",
+          "tenure": "Flexible tenures",
+          "processing_fees": "As per scheme",
+          "remarks": "Property documentation and valuation required"
+        },
+        {
+          "bank": "ICICI Bank",
+          "interest_range": "9.75% - 12.50% p.a.",
+          "loan_amount": "Based on property valuation",
+          "tenure": "Standard tenures",
+          "processing_fees": "As per policy",
+          "remarks": "Property appraisal process"
+        },
+        {
+          "bank": "Axis Bank",
+          "interest_range": "10.00% - 13.00% p.a.",
+          "loan_amount": "Based on property value",
+          "tenure": "Flexible",
+          "processing_fees": "As per scheme",
+          "remarks": "Branch application with property documentation"
+        },
+        {
+          "bank": "PNB",
+          "interest_range": "PSU rates",
+          "loan_amount": "Based on property valuation",
+          "tenure": "Standard tenures",
+          "processing_fees": "Low/PSU norms",
+          "remarks": "PSU norms apply, branch application"
+        }
+      ]
+    },
+    {
+      "id": "gold_loan",
+      "name": "Gold Loan",
+      "purpose": "Loan against gold jewelry for immediate liquidity needs",
+      "best_for": [
+        "Emergency cash requirements",
+        "Short-term financial needs",
+        "Quick loan disbursal needs",
+        "People with gold assets"
+      ],
+      "typical_eligibility": {
+        "income": "Minimal income requirements",
+        "age": "Typically 18+ years",
+        "credit_score": "Not heavily weighted",
+        "employment": [
+          "Gold jewelry owner",
+          "Any employment status"
+        ],
+        "other_criteria": [
+          "Ownership of gold jewelry",
+          "Gold purity assessment",
+          "Loan typically 60-75% of gold value"
+        ]
+      },
+      "documents_required": [
+        "KYC documents (PAN, Aadhaar)",
+        "Gold jewelry for valuation",
+        "Minimal documentation required"
+      ],
+      "bank_comparison": [
+        {
+          "bank": "SBI",
+          "interest_range": "7.50% - 9.50% p.a.",
+          "loan_amount": "Based on gold valuation",
+          "tenure": "Short to medium term",
+          "processing_fees": "Nil/Low",
+          "remarks": "Branch application with gold valuation"
+        },
+        {
+          "bank": "HDFC Bank",
+          "interest_range": "8.00% - 10.00% p.a.",
+          "loan_amount": "Based on gold value",
+          "tenure": "Flexible",
+          "processing_fees": "Low",
+          "remarks": "Quick processing, branch application"
+        },
+        {
+          "bank": "ICICI Bank",
+          "interest_range": "As per scheme",
+          "loan_amount": "Based on gold valuation",
+          "tenure": "Standard",
+          "processing_fees": "Low",
+          "remarks": "Branch application required"
+        },
+        {
+          "bank": "Axis Bank",
+          "interest_range": "As per scheme",
+          "loan_amount": "Based on gold value",
+          "tenure": "Flexible",
+          "processing_fees": "Low",
+          "remarks": "Quick disbursal, branch process"
+        },
+        {
+          "bank": "PNB",
+          "interest_range": "PSU norms",
+          "loan_amount": "Based on gold valuation",
+          "tenure": "Standard",
+          "processing_fees": "Low",
+          "remarks": "PSU norms, branch application"
+        }
+      ]
+    },
+    {
+      "id": "agricultural_loan",
+      "name": "Agricultural / Kisan Credit Loans",
+      "purpose": "Loan for farmers for agricultural activities, equipment, and crop cultivation",
+      "best_for": [
+        "Farmers with land ownership",
+        "Agricultural equipment purchase",
+        "Crop cultivation expenses",
+        "Farm development projects"
+      ],
+      "typical_eligibility": {
+        "income": "Agricultural income",
+        "age": "Farmers with land records",
+        "credit_score": "Flexible for farmers",
+        "employment": [
+          "Farmers",
+          "Land owners engaged in agriculture"
+        ],
+        "other_criteria": [
+          "Land ownership proof",
+          "Agricultural activity documentation",
+          "Government subsidies may apply"
+        ]
+      },
+      "documents_required": [
+        "Land records/ownership documents",
+        "Aadhaar Card",
+        "KYC documents",
+        "Agricultural activity proof"
+      ],
+      "bank_comparison": [
+        {
+          "bank": "SBI",
+          "interest_range": "Subsidized rates",
+          "loan_amount": "Based on land holding and requirements",
+          "tenure": "Seasonal/Annual",
+          "processing_fees": "Nil",
+          "remarks": "Government subsidy schemes available, branch application"
+        },
+        {
+          "bank": "HDFC Bank",
+          "interest_range": "As per RBI norms",
+          "loan_amount": "Agricultural borrowers",
+          "tenure": "Standard",
+          "processing_fees": "Low",
+          "remarks": "Branch application with land records"
+        },
+        {
+          "bank": "ICICI Bank",
+          "interest_range": "As per scheme",
+          "loan_amount": "For farmers",
+          "tenure": "Seasonal/Annual",
+          "processing_fees": "Low",
+          "remarks": "Land documentation required"
+        },
+        {
+          "bank": "Axis Bank",
+          "interest_range": "As per scheme",
+          "loan_amount": "For farmers",
+          "tenure": "Flexible",
+          "processing_fees": "Low",
+          "remarks": "Land documents required, branch process"
+        },
+        {
+          "bank": "PNB",
+          "interest_range": "Subsidized rates",
+          "loan_amount": "Based on land and requirements",
+          "tenure": "Seasonal/Annual",
+          "processing_fees": "Nil",
+          "remarks": "PSU bank with government schemes, branch application"
+        }
+      ]
+    }
+  ],
+  "special_government_linked_loans": [
+    {
+      "category": "Startup Loans",
+      "examples": ["Mudra Loan", "Stand-Up India"],
+      "purpose": "Support for startups and entrepreneurs"
+    },
+    {
+      "category": "Women Loans",
+      "examples": ["Mahila Loan Schemes"],
+      "purpose": "Financial support for women entrepreneurs"
+    },
+    {
+      "category": "Education Subsidy Loans",
+      "examples": ["Central Sector Interest Subsidy (CSIS)"],
+      "purpose": "Interest subsidy for economically weaker students"
+    },
+    {
+      "category": "Housing Subsidy",
+      "examples": ["Pradhan Mantri Awas Yojana (PMAY)"],
+      "purpose": "Subsidy for affordable housing"
+    },
+    {
+      "category": "MSME Credit",
+      "examples": ["CGTMSE (Credit Guarantee Trust for Micro and Small Enterprises)"],
+      "purpose": "Credit guarantee for MSMEs"
+    }
+  ],
+  "common_documents_across_loans": {
+    "identity_proof": ["PAN Card", "Aadhaar", "Passport", "Voter ID"],
+    "address_proof": ["Aadhaar", "Passport", "Utility bills", "Rent agreement"],
+    "income_proof": ["Salary slips", "Bank statements", "Form-16", "ITR", "GST returns"],
+    "property_documents": ["Sale agreement", "Title deed", "Encumbrance Certificate"],
+    "business_documents": ["GST registration", "Business financials", "ITR"],
+    "education_proof": ["Admission letter", "Fee structure"]
+  },
+  "universal_loan_approval_process": [
+    {
+      "step": 1,
+      "stage": "Eligibility Check",
+      "description": "Age, income, employment, credit score evaluation"
+    },
+    {
+      "step": 2,
+      "stage": "Documentation",
+      "description": "Submission of KYC and income/property/course documents"
+    },
+    {
+      "step": 3,
+      "stage": "Application Submission",
+      "description": "Online (bank portal/app) or offline (branch) submission"
+    },
+    {
+      "step": 4,
+      "stage": "Verification & Sanction",
+      "description": "Credit appraisal, document verification, conditional approval"
+    },
+    {
+      "step": 5,
+      "stage": "Disbursement",
+      "description": "Loan amount credited after acceptance of terms"
+    }
+  ],
+  "important_notes": [
+    "Personal loan rates vary widely by credit score, income, salary account, and employment type",
+    "Home loan interest is typically linked to external benchmarks (RLLR/MCLR) and adjusts with monetary policy",
+    "Banks may waive or reduce processing fees during promotional periods",
+    "Collateral is generally not required for personal loans but is required for home and certain education/business loans",
+    "EMI to Net Monthly Income (NMI) ratio should generally not exceed 65% for personal loans",
+    "Pre-approved loan offers may be available for existing customers through online banking platforms",
+    "Interest rates and terms are subject to change based on RBI policies and bank discretion",
+    "Always compare offers from multiple banks before finalizing a loan",
+    "Credit score significantly impacts loan approval and interest rates offered"
+  ]
+}

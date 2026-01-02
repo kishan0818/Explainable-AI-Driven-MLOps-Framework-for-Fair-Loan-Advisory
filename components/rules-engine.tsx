@@ -7,51 +7,50 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Search, BookOpen, Shield, Building2, Users, FileText, ExternalLink } from "lucide-react"
-import { rbiRules, governmentSchemes, findRelevantSchemes, findRelevantRules } from "@/lib/mockdata"
-import type { Rule, Scheme } from "@/lib/mockdata"
 
-export function RulesEngine() {
+interface RulesAndSchemesEngineProps {
+  referenceData?: any
+}
+
+export function RulesAndSchemesEngine({ referenceData }: RulesAndSchemesEngineProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedRule, setSelectedRule] = useState<Rule | null>(null)
-  const [selectedScheme, setSelectedScheme] = useState<Scheme | null>(null)
+  const [selectedItem, setSelectedItem] = useState<any | null>(null)
 
-  const filteredRules = searchQuery ? findRelevantRules(searchQuery) : rbiRules
+  // Use passed referenceData or fallback (empty)
+  const schemes = referenceData?.schemes || []
+  // We can construct "Rules" from loan types or other data if available, 
+  // or keeps using some static data if "Rules" aren't in reference-data yet.
+  // For now, let's assume 'rules' might be in bank_data or we just show schemes + loan types acting as rules.
 
-  const filteredSchemes = searchQuery ? findRelevantSchemes(searchQuery) : governmentSchemes
+  const loanTypes = referenceData?.bank_data?.loan_types || []
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "bg-destructive text-destructive-foreground"
-      case "medium":
-        return "bg-warning text-warning-foreground"
-      case "low":
-        return "bg-success text-success-foreground"
-      default:
-        return "bg-muted text-muted-foreground"
-    }
-  }
+  // Filter Logic
+  const filteredSchemes = schemes.filter((s: any) =>
+    s.scheme_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.description.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const filteredLoanTypes = loanTypes.filter((l: any) =>
+    l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    l.id.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   const getCategoryIcon = (category: string) => {
-    switch (category.toLowerCase()) {
-      case "business":
-        return <Building2 className="w-4 h-4" />
-      case "housing":
-        return <FileText className="w-4 h-4" />
-      case "agriculture":
-        return <Users className="w-4 h-4" />
-      default:
-        return <BookOpen className="w-4 h-4" />
+    switch (category?.toLowerCase()) {
+      case "business": return <Building2 className="w-4 h-4" />
+      case "housing": return <FileText className="w-4 h-4" />
+      case "agriculture": return <Users className="w-4 h-4" />
+      default: return <BookOpen className="w-4 h-4" />
     }
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in">
       {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
-          placeholder="Search rules, schemes, or regulations..."
+          placeholder="Search schemes, loan types, or eligibility rules..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10"
@@ -61,214 +60,128 @@ export function RulesEngine() {
       <Tabs defaultValue="schemes" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="schemes">Government Schemes</TabsTrigger>
-          <TabsTrigger value="rules">RBI/PSL Rules</TabsTrigger>
+          <TabsTrigger value="rules">Loan Categories & Rules</TabsTrigger>
         </TabsList>
 
+        {/* 1. Government Schemes Tab */}
         <TabsContent value="schemes" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
-            {filteredSchemes.map((scheme) => (
+            {filteredSchemes.length > 0 ? filteredSchemes.map((scheme: any, idx: number) => (
               <Card
-                key={scheme.id}
-                className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => setSelectedScheme(scheme)}
+                key={idx}
+                className="cursor-pointer hover:shadow-md transition-shadow hover:border-primary/50"
+                onClick={() => setSelectedItem({ ...scheme, type: 'scheme' })}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      {getCategoryIcon(scheme.category)}
-                      <CardTitle className="text-lg">{scheme.name}</CardTitle>
+                      <FileText className="w-4 h-4 text-primary" />
+                      <CardTitle className="text-lg">{scheme.scheme_name}</CardTitle>
                     </div>
                     <Badge variant="outline">{scheme.category}</Badge>
                   </div>
-                  <CardDescription className="text-sm">{scheme.description}</CardDescription>
+                  <CardDescription className="text-sm line-clamp-2">{scheme.description}</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Max Amount:</span>
-                      <div className="font-medium">{scheme.maxAmount}</div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Interest Rate:</span>
-                      <div className="font-medium">{scheme.interestRate}</div>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground">Tenure: {scheme.tenure}</span>
-                    <Button size="sm" variant="outline" className="h-6 text-xs bg-transparent">
-                      <ExternalLink className="w-3 h-3 mr-1" />
-                      Details
-                    </Button>
+                <CardContent>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Max: {scheme.max_amount}</span>
+                    <Button variant="ghost" size="sm" className="h-6">Details <ExternalLink className="w-3 h-3 ml-1" /></Button>
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )) : (
+              <div className="text-center p-8 text-muted-foreground col-span-2">No schemes found matching your search.</div>
+            )}
           </div>
         </TabsContent>
 
+        {/* 2. Rules / Loan Types Tab */}
         <TabsContent value="rules" className="space-y-4">
           <div className="grid gap-4">
-            {filteredRules.map((rule) => (
+            {filteredLoanTypes.length > 0 ? filteredLoanTypes.map((loan: any, idx: number) => (
               <Card
-                key={rule.id}
+                key={idx}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => setSelectedRule(rule)}
+                onClick={() => setSelectedItem({ ...loan, type: 'loan' })}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <Shield className="w-4 h-4" />
-                      <CardTitle className="text-lg">{rule.title}</CardTitle>
+                      <Shield className="w-4 h-4 text-primary" />
+                      <CardTitle className="text-lg">{loan.name}</CardTitle>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge className={getPriorityColor(rule.priority)}>{rule.priority.toUpperCase()}</Badge>
-                      <Badge variant="outline">{rule.category}</Badge>
-                    </div>
+                    <Badge variant="outline" className="uppercase">{loan.id.replace('_', ' ')}</Badge>
                   </div>
-                  <CardDescription className="text-sm">{rule.description}</CardDescription>
+                  <CardDescription className="text-sm">{loan.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">Key Criteria:</span>
-                      <ul className="text-sm mt-1 space-y-1">
-                        {rule.criteria.slice(0, 2).map((criteria, index) => (
-                          <li key={index} className="flex items-start space-x-2">
-                            <span className="w-1 h-1 bg-primary rounded-full mt-2 flex-shrink-0"></span>
-                            <span>{criteria}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="text-xs text-muted-foreground">
-                        Applicable: {rule.applicableFor.length} entities
-                      </span>
-                      <Button size="sm" variant="outline" className="h-6 text-xs bg-transparent">
-                        <ExternalLink className="w-3 h-3 mr-1" />
-                        View Full Rule
-                      </Button>
-                    </div>
+                  <div className="text-sm text-muted-foreground">
+                    Requires: {loan.documents_required?.slice(0, 3).join(", ")}...
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )) : (
+              <div className="text-center p-8 text-muted-foreground">No loan rules found.</div>
+            )}
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* Detailed View Modals */}
-      {selectedScheme && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+      {/* Detail Modal / Slide-over */}
+      {selectedItem && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <Card className="w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  {getCategoryIcon(selectedScheme.category)}
-                  <CardTitle>{selectedScheme.name}</CardTitle>
+                  {selectedItem.type === 'scheme' ? <FileText className="w-5 h-5 text-primary" /> : <Shield className="w-5 h-5 text-primary" />}
+                  <CardTitle>{selectedItem.scheme_name || selectedItem.name}</CardTitle>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setSelectedScheme(null)}>
-                  Close
-                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedItem(null)}><XCircle className="w-5 h-5" /></Button>
               </div>
-              <CardDescription>{selectedScheme.description}</CardDescription>
+              <CardDescription>{selectedItem.description}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="font-medium text-muted-foreground">Max Amount</span>
-                  <div className="text-lg font-bold">{selectedScheme.maxAmount}</div>
+            <CardContent className="space-y-6">
+              {/* Dynamic Content based on Type */}
+              {selectedItem.type === 'scheme' ? (
+                <div className="grid gap-4">
+                  <div className="grid md:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
+                    <div><span className="text-muted-foreground text-sm">Max Amount</span><div className="font-semibold">{selectedItem.max_amount}</div></div>
+                    <div><span className="text-muted-foreground text-sm">Interest Subsidy</span><div className="font-semibold">{selectedItem.subsidy || "N/A"}</div></div>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Eligibility</h4>
+                    <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                      {selectedItem.eligibility?.map((e: string, i: number) => <li key={i}>{e}</li>)}
+                    </ul>
+                  </div>
                 </div>
-                <div>
-                  <span className="font-medium text-muted-foreground">Interest Rate</span>
-                  <div className="text-lg font-bold">{selectedScheme.interestRate}</div>
+              ) : (
+                <div className="grid gap-4">
+                  <div>
+                    <h4 className="font-semibold mb-2">Eligibility Criteria</h4>
+                    <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-2">
+                      {Object.entries(selectedItem.eligibility_criteria || {}).map(([k, v]: any, i) => (
+                        <div key={i} className="flex justify-between border-b last:border-0 pb-1 last:pb-0 border-muted-foreground/10">
+                          <span className="capitalize">{k.replace('_', ' ')}</span>
+                          <span className="font-medium">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Required Documents</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedItem.documents_required?.map((d: string, i: number) => (
+                        <Badge key={i} variant="secondary">{d}</Badge>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span className="font-medium text-muted-foreground">Tenure</span>
-                  <div className="text-lg font-bold">{selectedScheme.tenure}</div>
-                </div>
-              </div>
+              )}
 
-              <div>
-                <h4 className="font-medium mb-2">Eligibility Criteria</h4>
-                <ul className="space-y-1">
-                  {selectedScheme.eligibility.map((criteria, index) => (
-                    <li key={index} className="flex items-start space-x-2 text-sm">
-                      <span className="w-1 h-1 bg-success rounded-full mt-2 flex-shrink-0"></span>
-                      <span>{criteria}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium mb-2">Key Benefits</h4>
-                <ul className="space-y-1">
-                  {selectedScheme.benefits.map((benefit, index) => (
-                    <li key={index} className="flex items-start space-x-2 text-sm">
-                      <span className="w-1 h-1 bg-primary rounded-full mt-2 flex-shrink-0"></span>
-                      <span>{benefit}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium mb-2">Required Documents</h4>
-                <div className="flex flex-wrap gap-2">
-                  {selectedScheme.documents.map((doc, index) => (
-                    <Badge key={index} variant="outline">
-                      {doc}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {selectedRule && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Shield className="w-5 h-5" />
-                  <CardTitle>{selectedRule.title}</CardTitle>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => setSelectedRule(null)}>
-                  Close
-                </Button>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Badge className={getPriorityColor(selectedRule.priority)}>{selectedRule.priority.toUpperCase()}</Badge>
-                <Badge variant="outline">{selectedRule.category}</Badge>
-              </div>
-              <CardDescription>{selectedRule.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h4 className="font-medium mb-2">Key Criteria</h4>
-                <ul className="space-y-1">
-                  {selectedRule.criteria.map((criteria, index) => (
-                    <li key={index} className="flex items-start space-x-2 text-sm">
-                      <span className="w-1 h-1 bg-primary rounded-full mt-2 flex-shrink-0"></span>
-                      <span>{criteria}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium mb-2">Applicable For</h4>
-                <div className="flex flex-wrap gap-2">
-                  {selectedRule.applicableFor.map((entity, index) => (
-                    <Badge key={index} variant="secondary">
-                      {entity}
-                    </Badge>
-                  ))}
-                </div>
+              <div className="flex justify-end pt-4">
+                <Button onClick={() => setSelectedItem(null)}>Close Details</Button>
               </div>
             </CardContent>
           </Card>
@@ -276,4 +189,9 @@ export function RulesEngine() {
       )}
     </div>
   )
+}
+
+// Icon helper needed for button
+function XCircle({ className }: { className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6" /><path d="m9 9 6 6" /></svg>
 }
