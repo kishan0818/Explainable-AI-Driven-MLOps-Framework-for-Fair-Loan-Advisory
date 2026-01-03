@@ -33,37 +33,35 @@ export function ModelPrediction({
 
   useEffect(() => {
     if (initialResult) {
-      mapResultToState(initialResult)
+      // STRICT: Strict mapping from DB result. No recomputation.
+      const banks = initialResult.bank_suitability ?? []
+      const schemes = initialResult.schemes_suggested ?? []
+
+      // Sort banks: High suitability first (Display Logic)
+      const sortedBanks = Array.isArray(banks) ? [...banks].sort((a: any, b: any) => {
+        const order = { high: 3, medium: 2, low: 1 }
+        return (order[b.suitability as keyof typeof order] || 0) - (order[a.suitability as keyof typeof order] || 0)
+      }) : []
+
+      setPrediction({
+        applicationId: initialResult.application_id,
+        prediction: initialResult.prediction,
+        confidence: initialResult.confidence ?? initialResult.ml_probability,
+        riskBand: initialResult.risk_band,
+        riskScore: initialResult.risk_score,
+        positiveFactors: initialResult.positive_factors ?? [],
+        riskFactors: initialResult.negative_factors ?? [],
+        banks: sortedBanks,
+        schemes: schemes,
+        decisionSummary: initialResult.decision_summary,
+        // Helper for UI context (not DB data)
+        loanType: initialResult.loan_type
+      })
     }
   }, [initialResult])
 
-  const mapResultToState = (result: any) => {
-    const approveProb = result.ml_probability !== undefined ? result.ml_probability : (1 - (result.risk_score / 100))
-    const rejectProb = 1 - approveProb
+  // Removed old mapResultToState logic entirely
 
-    // Sort banks: High suitability first
-    const sortedBanks = result.bank_suitability?.sort((a: any, b: any) => {
-      const order = { high: 3, medium: 2, low: 1 }
-      return (order[b.suitability as keyof typeof order] || 0) - (order[a.suitability as keyof typeof order] || 0)
-    })
-
-    const predictionData = {
-      applicationId: result.application_id,
-      prediction: result.prediction || (approveProb > 0.5 ? 'approve' : 'reject'),
-      confidence: result.confidence || (approveProb > 0.5 ? approveProb : rejectProb),
-      riskBand: result.risk_band,
-      riskScore: result.risk_score,
-      modelVersion: "RandomForest_v1",
-      loanType: result.loan_type, // Get loan type for context lookup
-      probability: { approve: approveProb, reject: rejectProb },
-      riskFactors: result.negative_factors || [],
-      positiveFactors: result.positive_factors || [],
-      banks: sortedBanks || [],
-      schemes: result.schemes || result.scheme_recommendations || result.schemes_suggested || [],
-      decisionSummary: result.decision_summary
-    }
-    setPrediction(predictionData)
-  }
 
   const handlePredict = async () => {
     setIsLoading(true)
@@ -80,9 +78,32 @@ export function ModelPrediction({
       if (!response.ok) throw new Error(`Backend error: ${response.status}`)
 
       const result = await response.json()
-      // result now includes application_id, loan_type etc.
-      mapResultToState({ ...result, loan_type: applicationData?.loan_type })
-      onPredictionComplete?.(result) // Pass full result up for navigation
+
+      // API result is now STRICT.
+      // Format consistent with what we expect in state
+      const banks = result.bank_suitability || []
+      const schemes = result.schemes_suggested || []
+
+      const riskFactors = Array.isArray(result.negative_factors) ? result.negative_factors : []
+      const positiveFactors = Array.isArray(result.positive_factors) ? result.positive_factors : []
+
+      // Sort banks
+      const sortedBanks = Array.isArray(banks) ? [...banks].sort((a: any, b: any) => {
+        const order = { high: 3, medium: 2, low: 1 }
+        return (order[b.suitability as keyof typeof order] || 0) - (order[a.suitability as keyof typeof order] || 0)
+      }) : []
+
+      const formattedResult = {
+        ...result,
+        banks: sortedBanks,
+        schemes: schemes,
+        riskFactors: riskFactors,
+        positiveFactors: positiveFactors,
+        loanType: applicationData?.loan_type
+      }
+
+      setPrediction(formattedResult)
+      onPredictionComplete?.(formattedResult)
 
     } catch (error: any) {
       console.error("Prediction error:", error)
@@ -162,7 +183,7 @@ export function ModelPrediction({
               </Button>
             )}
             <Badge variant={isApproved ? "default" : "secondary"} className="h-8 px-3 text-sm">
-              {Math.round(prediction.confidence * 100)}% Match
+              {prediction.confidence !== null ? `${Math.round(prediction.confidence * 100)}% Match` : "Match unavailable"}
             </Badge>
           </div>
         </div>
@@ -203,12 +224,12 @@ export function ModelPrediction({
               </p>
 
               <div className="flex flex-wrap gap-2">
-                {prediction.positiveFactors.slice(0, 2).map((f: string, i: number) => (
+                {Array.isArray(prediction.positiveFactors) && prediction.positiveFactors.slice(0, 2).map((f: string, i: number) => (
                   <Badge key={i} variant="outline" className="text-success border-success/30 bg-success/5 font-normal">
                     {f}
                   </Badge>
                 ))}
-                {prediction.riskFactors.length > 0 && (
+                {Array.isArray(prediction.riskFactors) && prediction.riskFactors.length > 0 && (
                   <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/5 font-normal">
                     {prediction.riskFactors[0]}
                   </Badge>

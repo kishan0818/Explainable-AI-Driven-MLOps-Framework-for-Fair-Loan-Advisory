@@ -142,6 +142,8 @@ class ModelPrediction(BaseModel):
     timestamp: str
 
 # --- Authentication Middleware ---
+
+
 async def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Verify Supabase JWT via Remote Auth API (Strict)"""
     token = credentials.credentials
@@ -308,10 +310,14 @@ def get_reference_data():
         "schemes": schemes_data.get("schemes", [])
     }
 
+
+# ... (Previous imports and setup remain unchanged up to line 311)
+
 @app.post("/predict", response_model=ModelPrediction)
 async def predict(application: LoanApplication, user_payload: dict = Depends(verify_token)):
     user_id = user_payload.get("sub")
     
+    # 1. Sync User to public.users (FK Requirement)
     # 1. Sync User to public.users (FK Requirement)
     try:
         user_email = user_payload.get("email")
@@ -341,8 +347,7 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
     }
     
     canonical_loan_type = LOAN_TYPE_MAP.get(application.loan_type, application.loan_type)
-    # ----------------------------------------
-
+    
     # 2. Insert into loan_applications
     dti_val = (application.existing_emi / application.income) if application.income > 0 else 0
     
@@ -354,7 +359,7 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         "employment_type": application.employment_type if application.employment_type in ['salaried', 'self_employed', 'business'] else 'salaried',
         "existing_emi": application.existing_emi,
         "credit_score": application.credit_score,
-        "status": "processed" # Mark as processed immediately
+        "status": "processed" # Mark as processed initially
     }
     
     try:
@@ -366,14 +371,14 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         logger.error(f"DB Insert Error: {e}")
         raise HTTPException(status_code=500, detail="Database Error")
 
-    # 2. ML Inference
+    # 3. ML Inference
     processed_df = preprocess_application(application)
     try:
         probs = model.predict_proba(processed_df)[0]
         prob_reject, prob_approve = probs[0], probs[1]
     except Exception as e:
         logger.error(f"Inference Error: {e}")
-        # Fallback if model fails (rare)
+        # Fallback if model fails (should be rare)
         prob_approve = 0.5
         prob_reject = 0.5
 
@@ -384,7 +389,6 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
              prob_approve *= 0.9
              prob_reject = 1.0 - prob_approve
     
-    
     risk_score = prob_reject * 100
     if risk_score < 30: risk_band = "low"
     elif risk_score < 70: risk_band = "medium"
@@ -392,7 +396,7 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
 
     pos_factors, neg_factors = get_risk_factors(application, prob_approve, dti_val)
     
-    # 4. Bank Suitability (Phase 3 Fix: Always Run Logic)
+    # 4. Bank Suitability (PERSONALIZED LOGIC)
     bank_results = []
     has_high_suitability_bank = False
     
@@ -405,19 +409,19 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
             banks = loan_type_data["bank_comparison"]
             
             for bank in banks:
-                suitability = "medium"
+                suitability = "medium" # Default start, but logic will override
                 reasons = []
                 
                 # Logic: Bank Specific Rules vs User Profile
-                
-                # A. Credit Score Rules
                 bank_name_lower = bank['bank'].lower()
                 is_top_tier = bank_name_lower in ['sbi', 'hdfc bank', 'icici bank']
                 
+                # A. Credit Score Rules
                 if application.credit_score:
                     if application.credit_score >= 750:
-                        reasons.append("Excellent credit score")
-                        if risk_band == "low": suitability = "high"
+                        reasons.append("Excellent credit score matches top-tier criteria")
+                    elif application.credit_score >= 700:
+                        reasons.append("Good credit score")
                     elif application.credit_score < 650:
                         suitability = "low"
                         reasons.append("Credit score below preferred threshold")
@@ -425,35 +429,51 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
                     # No Credit History
                     if is_top_tier:
                          suitability = "low"
-                         reasons.append("Credit history typically required")
+                         reasons.append("Credit history typically required for this bank")
                     else:
-                         reasons.append("May verify alternate income proofs")
+                         reasons.append("Bank may verify alternate income proofs")
 
                 # B. Risk Band Impact
                 if risk_band == "high":
                     suitability = "low"
-                    reasons.append("High risk profile")
-                elif risk_band == "low" and not reasons:
+                    reasons.append("High risk profile flagged by AI")
+                elif risk_band == "low" and not "Credit score below preferred threshold" in reasons:
+                    # Upgrade to high if low risk and no major blockers
                     suitability = "high"
-                    reasons.append("Strong profile match")
+                    reasons.append("Strong AI safety rating")
 
                 # C. DTI Impact
                 if dti_val > 0.5:
                      suitability = "low"
-                     reasons.append("High DTI ratio")
+                     reasons.append(f"High DTI ratio ({int(dti_val*100)}%)")
+                elif dti_val < 0.3:
+                     reasons.append("Healthy debt-to-income ratio")
 
-                # Dedupe Reasons
-                reasons = list(set(reasons))
-                if not reasons: reasons.append("Standard eligibility met")
-                
-                if suitability == "high" or suitability == "medium":
+                # D. Income Thresholds (Example)
+                if is_top_tier and application.income < 25000:
+                     suitability = "low"
+                     reasons.append("Income below tier-1 bank preference")
+
+                # Consolidate Reason
+                # If low suitability, prioritize negative reasons. If high, positive.
+                if suitability == "low":
+                    # Filter for negative reasons only if possible, or show top blocker
+                    neg_reasons = [r for r in reasons if "below" in r or "High" in r or "required" in r]
+                    final_reason = neg_reasons[0] if neg_reasons else (reasons[0] if reasons else "Does not meet primary criteria")
+                elif suitability == "high":
+                    pos_reasons = [r for r in reasons if "Excellent" in r or "Strong" in r or "Healthy" in r]
+                    final_reason = pos_reasons[0] if pos_reasons else "Strong profile match"
+                else:
+                    final_reason = reasons[0] if reasons else "Meets standard eligibility"
+
+                if suitability == "high":
                     has_high_suitability_bank = True
 
                 bank_entry = {
                     "application_id": app_id,
                     "bank_name": bank['bank'],
                     "suitability": suitability,
-                    "reason": "; ".join(reasons)
+                    "reason": final_reason
                 }
                 bank_results.append(bank_entry)
                 supabase.table("bank_suitability").insert(bank_entry).execute()
@@ -464,76 +484,78 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         logger.error(f"Bank Logic Error: {e}")
 
     # 5. Determine Final Decision & Schemes
-    # Decision is APPROVE if at least one bank is viable, else REVIEW/REJECT
+    # Decision is APPROVE if ML Confident AND (High Suitability Bank OR Medium/Low Risk)
     
-    final_decision = "approve" if has_high_suitability_bank else "reject"
+    ml_confidence_high = prob_approve > 0.6
+    final_decision = "approve"
     
-    # If ML is super confident about rejection, override (but keep banks visible)
-    if prob_approve < 0.2: 
+    if prob_approve < 0.5:
         final_decision = "reject"
-    
-    # 6. Scheme Recommendations (If Rejected or High Risk)
+    elif not has_high_suitability_bank and risk_band == "high":
+        final_decision = "reject"
+        
+    # 6. Scheme Recommendations (If Rejected or High Risk or Logic match)
     scheme_results = []
-    if final_decision != "approve" or risk_band == "high" or application.credit_score is None:
-        try:
-            schemes = schemes_data.get("schemes", [])
-            for scheme in schemes:
-                # Basic matching logic
-                is_match = False
-                match_reason = ""
-                
-                # Category Match
-                scheme_cat = scheme.get("category", "").lower() 
-                app_cat_map = {
-                    "business": "enterprise", 
-                    "msme_loan": "enterprise",
-                    "agriculture_loan": "agricultur", # Matches "Agricultural Credit", "Agricultural Insurance"
-                    "home_loan": "housing", # Matches "Housing Finance..."
-                    "education_loan": "education", # Matches "Education Loans"
-                    "personal_loan": "urban livelihood" # Matches "Urban Livelihood..." (NULM)
-                }
-                required_cat = app_cat_map.get(canonical_loan_type, "general")
-                
-                # Loose match: e.g. "enterprise" in "Enterprise Development"
-                if required_cat in scheme_cat or scheme_cat == "general":
-                    is_match = True
-                    match_reason = f"Matches your loan category ({required_cat})"
+    # Always check schemes, but prioritize them if rejected
+    try:
+        schemes = schemes_data.get("schemes", [])
+        for scheme in schemes:
+            # Basic matching logic
+            is_match = False
+            match_reason = ""
+            
+            # Category Match
+            scheme_cat = scheme.get("category", "").lower() 
+            app_cat_map = {
+                "business": "enterprise", 
+                "msme_loan": "enterprise",
+                "agriculture_loan": "agricultur", 
+                "home_loan": "housing", 
+                "education_loan": "education", 
+                "personal_loan": "urban livelihood" 
+            }
+            required_cat = app_cat_map.get(canonical_loan_type, "general")
+            
+            # Loose match
+            if required_cat in scheme_cat or scheme_cat == "general":
+                is_match = True
+                match_reason = f"Matches your loan category ({required_cat})"
 
-                # If match, add it
-                if is_match:
-                    # For API Response (Pydantic Model)
-                    api_rec = {
-                        "scheme_id": scheme.get("id", "generic"),
-                        "scheme_name": scheme.get("name", "Unknown Scheme"),
-                        "reason": match_reason
-                    }
-                    scheme_results.append(api_rec)
-                    
-                    # For DB Persistence (Schema likely app_id, scheme_id, scheme_name, reason)
-                    db_rec = {
-                        "application_id": app_id,
-                        "scheme_id": scheme.get("id"), # Fix: Include scheme_id
-                        "scheme_name": scheme.get("name", "Unknown Scheme"),
-                        "reason": match_reason
-                    }
-                    supabase.table("scheme_recommendations").insert(db_rec).execute()
-        except Exception as e:
-            logger.error(f"Scheme insert error: {e}")
+            # If match, add it
+            if is_match:
+                # For API Response
+                api_rec = {
+                    "scheme_id": scheme.get("id", "generic"),
+                    "scheme_name": scheme.get("name", "Unknown Scheme"),
+                    "reason": match_reason
+                }
+                scheme_results.append(api_rec)
+                
+                # For DB Persistence
+                db_rec = {
+                    "application_id": app_id,
+                    "scheme_id": scheme.get("id"),
+                    "scheme_name": scheme.get("name", "Unknown Scheme"),
+                    "reason": match_reason
+                }
+                supabase.table("scheme_recommendations").insert(db_rec).execute()
+    except Exception as e:
+        logger.error(f"Scheme insert error: {e}")
 
     # 7. Insert Analysis Results (Source of Truth)
+    # Mapping: confidence = prob_approve
     analysis_data = {
         "application_id": app_id,
         "risk_score": float(risk_score),
         "risk_band": risk_band,
-        "ml_probability": float(prob_approve),
-        "decision_summary": f"{final_decision}", # Store simple decision for now or kept detailed. User asked for distinct status.
+        "ml_probability": float(prob_approve), # This IS the confidence
+        "decision_summary": f"AI predicted {final_decision.upper()} with {int(prob_approve*100)}% confidence.", 
         "positive_factors": json.loads(json.dumps(pos_factors)),
         "negative_factors": json.loads(json.dumps(neg_factors))
     }
     supabase.table("analysis_results").insert(analysis_data).execute()
 
-    # CRITICAL FIX: Update loan_applications status to match final decision
-    # This ensures Dashboard and DB are in sync with the logic that considers Bank Suitability
+    # Sync Status
     supabase.table("loan_applications").update({"status": final_decision}).eq("id", app_id).execute()
 
     return {
@@ -541,8 +563,8 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         "loan_type": canonical_loan_type,
         "risk_score": float(risk_score),
         "risk_band": risk_band,
-        "prediction": final_decision, # Return the calculated decision (including bank logic)
-        "confidence": float(prob_approve),
+        "prediction": final_decision,
+        "confidence": float(prob_approve), # EXACT output
         "positive_factors": pos_factors,
         "negative_factors": neg_factors,
         "bank_suitability": bank_results,
@@ -552,4 +574,6 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
     }
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run("fastapi_backend:app", host="0.0.0.0", port=8000, reload=True)
+

@@ -37,7 +37,7 @@ export default function UserDashboard() {
           .from('loan_applications')
           .select(`
               *,
-              analysis_results!analysis_results_application_id_fkey ( * ),
+              analysis_results ( * ),
               bank_suitability ( * ),
               scheme_recommendations ( * )
             `)
@@ -53,44 +53,45 @@ export default function UserDashboard() {
 
       const formattedApps = appRes.data?.map(app => {
         const analysis = app.analysis_results?.[0]
-        const mlProb = analysis?.ml_probability ?? 0.5
 
-        // Phase 3 Fix: Use DB status as source of truth.
-        let finalStatus = (app.status === 'approve' || app.status === 'reject') ? app.status : (mlProb > 0.5 ? 'approve' : 'reject')
+        // STRICT: Source of truth is DB.
+        // Status is app.status (which includes Bank Suitability logic from backend).
+        // Confidence is analysis.ml_probability (exact value).
 
-        // If risk band is high, override to reject if not explicitly approved
-        if (analysis?.risk_band === 'high' && finalStatus !== 'approve') {
-          finalStatus = 'reject'
-        }
+        const finalStatus = app.status || 'processed'
 
-        // Logic for Needs Review vs Rejected
+        // Display Logic only (Visual mapping, not data changing)
         let displayStatus = 'Needs Review'
         if (finalStatus === 'approve') displayStatus = 'Approved'
         if (finalStatus === 'reject') displayStatus = 'Rejected'
-        if (finalStatus === 'reject' && analysis?.risk_band !== 'high') displayStatus = 'Needs Review'
+        // If technical reject but low risk (rare), keep rejected. 
+        // If unknown status, 'Needs Review' is safe default for UI badge.
 
         return {
           id: app.id,
           displayId: app.id.slice(0, 8).toUpperCase(),
           type: app.loan_type?.replace('_', ' ') || 'Loan',
           amount: typeof app.loan_amount === 'number' ? `₹${app.loan_amount.toLocaleString()}` : app.loan_amount,
-          status: finalStatus, // internal status
-          displayStatus: displayStatus, // UI Badge Text
+          status: finalStatus, // Internal status
+          displayStatus: displayStatus, // UI Badge Text only
           submittedDate: new Date(app.created_at).toLocaleDateString(),
 
           // Full Data for Detail View (Modal)
           fullData: {
             application_id: app.id,
             loan_type: app.loan_type,
-            prediction: finalStatus,
-            confidence: mlProb > 0.5 ? mlProb : (1 - mlProb),
-            risk_band: analysis?.risk_band || 'medium',
-            risk_score: analysis?.risk_score || 50,
-            negative_factors: analysis?.negative_factors || [],
-            positive_factors: analysis?.positive_factors || [],
+            prediction: app.status, // APPROVE / REJECT FROM DB
+            // EXACT CONFIDENCE. No math.
+            confidence: analysis?.ml_probability ?? null,
+            risk_band: analysis?.risk_band,
+            risk_score: analysis?.risk_score,
+            negative_factors: analysis?.negative_factors ?? [],
+            positive_factors: analysis?.positive_factors ?? [],
             decision_summary: analysis?.decision_summary,
-            bank_suitability: app.bank_suitability || [],
-            schemes: app.scheme_recommendations || [] // Schemes Logic Fix
+
+            // Pass persisted sub-tables directly
+            bank_suitability: app.bank_suitability ?? [],
+            schemes_suggested: app.scheme_recommendations ?? [], // Strict Key
           }
         }
       }) || []
