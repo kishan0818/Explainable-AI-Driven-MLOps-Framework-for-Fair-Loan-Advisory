@@ -35,7 +35,7 @@ export function ModelPrediction({
     if (initialResult) {
       // STRICT: Strict mapping from DB result. No recomputation.
       const banks = initialResult.bank_suitability ?? []
-      const schemes = initialResult.schemes_suggested ?? []
+      const schemes = initialResult.scheme_recommendations ?? []
 
       // Sort banks: High suitability first (Display Logic)
       const sortedBanks = Array.isArray(banks) ? [...banks].sort((a: any, b: any) => {
@@ -46,7 +46,8 @@ export function ModelPrediction({
       setPrediction({
         applicationId: initialResult.application_id,
         prediction: initialResult.prediction,
-        confidence: initialResult.confidence ?? initialResult.ml_probability,
+        // STRICT: Store exact DB field name, no renaming
+        ml_probability: initialResult.ml_probability,
         riskBand: initialResult.risk_band,
         riskScore: initialResult.risk_score,
         positiveFactors: initialResult.positive_factors ?? [],
@@ -82,7 +83,7 @@ export function ModelPrediction({
       // API result is now STRICT.
       // Format consistent with what we expect in state
       const banks = result.bank_suitability || []
-      const schemes = result.schemes_suggested || []
+      const schemes = result.scheme_recommendations || []
 
       const riskFactors = Array.isArray(result.negative_factors) ? result.negative_factors : []
       const positiveFactors = Array.isArray(result.positive_factors) ? result.positive_factors : []
@@ -183,7 +184,9 @@ export function ModelPrediction({
               </Button>
             )}
             <Badge variant={isApproved ? "default" : "secondary"} className="h-8 px-3 text-sm">
-              {prediction.confidence !== null ? `${Math.round(prediction.confidence * 100)}% Match` : "Match unavailable"}
+              {typeof prediction.ml_probability === "number" && !isNaN(prediction.ml_probability)
+                ? `${Math.round(prediction.ml_probability * 100)}% Match`
+                : "Match unavailable"}
             </Badge>
           </div>
         </div>

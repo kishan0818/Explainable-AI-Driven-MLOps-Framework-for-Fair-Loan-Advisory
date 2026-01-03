@@ -134,11 +134,12 @@ class ModelPrediction(BaseModel):
     risk_score: float
     risk_band: str
     prediction: str  # approve/reject (based on ML prob)
-    confidence: float
+    ml_probability: float  # Changed from confidence to match DB
     positive_factors: List[str]
     negative_factors: List[str]
     bank_suitability: List[BankSuitabilityResult]
-    schemes_suggested: List[SchemeRecommendationResult]
+    scheme_recommendations: List[SchemeRecommendationResult]  # Changed from schemes_suggested to match DB
+    decision_summary: str
     timestamp: str
 
 # --- Authentication Middleware ---
@@ -564,11 +565,11 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         "risk_score": float(risk_score),
         "risk_band": risk_band,
         "prediction": final_decision,
-        "confidence": float(prob_approve), # EXACT output
+        "ml_probability": float(prob_approve),  # Changed from confidence to match DB
         "positive_factors": pos_factors,
         "negative_factors": neg_factors,
         "bank_suitability": bank_results,
-        "schemes_suggested": scheme_results,
+        "scheme_recommendations": scheme_results,  # Changed from schemes_suggested to match DB
         "decision_summary": analysis_data["decision_summary"],
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

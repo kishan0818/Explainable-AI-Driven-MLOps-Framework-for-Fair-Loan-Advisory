@@ -81,8 +81,8 @@ export default function UserDashboard() {
             application_id: app.id,
             loan_type: app.loan_type,
             prediction: app.status, // APPROVE / REJECT FROM DB
-            // EXACT CONFIDENCE. No math.
-            confidence: analysis?.ml_probability ?? null,
+            // STRICT: Use DB field name exactly, no renaming
+            ml_probability: analysis?.ml_probability ?? null,
             risk_band: analysis?.risk_band,
             risk_score: analysis?.risk_score,
             negative_factors: analysis?.negative_factors ?? [],
@@ -91,7 +91,7 @@ export default function UserDashboard() {
 
             // Pass persisted sub-tables directly
             bank_suitability: app.bank_suitability ?? [],
-            schemes_suggested: app.scheme_recommendations ?? [], // Strict Key
+            scheme_recommendations: app.scheme_recommendations ?? [],
           }
         }
       }) || []
@@ -181,8 +181,7 @@ export default function UserDashboard() {
           <ModelPrediction
             initialResult={{
               ...selectedApp.fullData,
-              application_id: selectedApp.id,
-              schemes: selectedApp.fullData.schemes
+              application_id: selectedApp.id
             }}
             mode="view"
             referenceData={referenceData}
