@@ -85,8 +85,13 @@ export default function UserDashboard() {
             ml_probability: analysis?.ml_probability ?? null,
             risk_band: analysis?.risk_band,
             risk_score: analysis?.risk_score,
-            negative_factors: analysis?.negative_factors ?? [],
-            positive_factors: analysis?.positive_factors ?? [],
+            // Preserve structured XAI data for Phase 2 UI
+            negative_factors: (analysis?.negative_factors ?? []).map((f: any) =>
+              typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'negative' } : f
+            ),
+            positive_factors: (analysis?.positive_factors ?? []).map((f: any) =>
+              typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'positive' } : f
+            ),
             decision_summary: analysis?.decision_summary,
 
             // Pass persisted sub-tables directly

@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Brain, AlertTriangle, CheckCircle, BarChart3, Zap,
   Building2, Lightbulb, FileText, Info, ArrowRight, ShieldCheck
 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { GovernmentSchemes } from "@/components/government-schemes"
+import type { ExplainabilityFactor, ImprovementRecommendation } from "@/types/xai"
 
 interface ModelPredictionProps {
   applicationData?: any
@@ -50,8 +52,13 @@ export function ModelPrediction({
         ml_probability: initialResult.ml_probability,
         riskBand: initialResult.risk_band,
         riskScore: initialResult.risk_score,
-        positiveFactors: initialResult.positive_factors ?? [],
-        riskFactors: initialResult.negative_factors ?? [],
+        // Preserve structured XAI data for rich UI (Phase 2)
+        positiveFactors: (initialResult.positive_factors ?? []).map((f: any) =>
+          typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'positive' } : f
+        ),
+        riskFactors: (initialResult.negative_factors ?? []).map((f: any) =>
+          typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'negative' } : f
+        ),
         banks: sortedBanks,
         schemes: schemes,
         decisionSummary: initialResult.decision_summary,
@@ -85,8 +92,17 @@ export function ModelPrediction({
       const banks = result.bank_suitability || []
       const schemes = result.scheme_recommendations || []
 
-      const riskFactors = Array.isArray(result.negative_factors) ? result.negative_factors : []
-      const positiveFactors = Array.isArray(result.positive_factors) ? result.positive_factors : []
+      // Preserve structured XAI data for rich UI (Phase 2)
+      const riskFactors = Array.isArray(result.negative_factors)
+        ? result.negative_factors.map((f: any) =>
+          typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'negative' } : f
+        )
+        : []
+      const positiveFactors = Array.isArray(result.positive_factors)
+        ? result.positive_factors.map((f: any) =>
+          typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'positive' } : f
+        )
+        : []
 
       // Sort banks
       const sortedBanks = Array.isArray(banks) ? [...banks].sort((a: any, b: any) => {
@@ -129,12 +145,30 @@ export function ModelPrediction({
     }
   }
 
-  // Lookup Context from Reference Data
   const getLoanContext = () => {
     if (!referenceData?.bank_data?.loan_types || !prediction?.loanType) return null
     return referenceData.bank_data.loan_types.find((l: any) => l.id === prediction.loanType)
   }
   const loanContext = getLoanContext()
+
+  // XAI UI Helpers (Phase 2)
+  const getImpactColor = (impact?: string) => {
+    switch (impact) {
+      case 'high': return 'border-destructive/50 bg-destructive/10 text-destructive ring-1 ring-destructive/30'
+      case 'medium': return 'border-warning/50 bg-warning/10 text-warning-foreground'
+      case 'low': return 'border-success/30 bg-success/5 text-success'
+      default: return 'border-muted bg-muted/30 text-muted-foreground'
+    }
+  }
+
+  const getImpactIcon = (impact?: string) => {
+    if (impact === 'high') return <Zap className="w-3 h-3 ml-1" />
+    return null
+  }
+
+  const isStructuredFactor = (f: any): f is ExplainabilityFactor => {
+    return f && typeof f === 'object' && 'factor' in f
+  }
 
   if (mode === 'predict' && !prediction) {
     return (
@@ -226,16 +260,90 @@ export function ModelPrediction({
                 {prediction.decisionSummary || `Your profile has been analyzed against 15+ banking parameters including income stability, credit history, and debt-to-income ratio.`}
               </p>
 
-              <div className="flex flex-wrap gap-2">
-                {Array.isArray(prediction.positiveFactors) && prediction.positiveFactors.slice(0, 2).map((f: string, i: number) => (
-                  <Badge key={i} variant="outline" className="text-success border-success/30 bg-success/5 font-normal">
-                    {f}
-                  </Badge>
-                ))}
+              {/* Enhanced XAI Factor Display (Phase 2) */}
+              <div className="space-y-3">
+                {/* Positive Factors - Approval Drivers */}
+                {Array.isArray(prediction.positiveFactors) && prediction.positiveFactors.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-success mb-2 flex items-center">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Approval Drivers ({prediction.positiveFactors.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {prediction.positiveFactors.slice(0, 3).map((f: any, i: number) => {
+                        const factor = isStructuredFactor(f) ? f : { factor: f, feature: 'unknown', impact: 'medium' as const, direction: 'positive' as const }
+                        return (
+                          <TooltipProvider key={i}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge
+                                  variant="outline"
+                                  className={`font-normal cursor-help ${getImpactColor(factor.impact)} border`}
+                                >
+                                  {factor.factor}
+                                  {getImpactIcon(factor.impact)}
+                                </Badge>
+                              </TooltipTrigger>
+                              {factor.feature !== 'unknown' && (
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <p className="text-xs">
+                                    <span className="font-semibold">Based on:</span> {factor.feature}
+                                  </p>
+                                  {factor.impact && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Impact: {factor.impact}
+                                    </p>
+                                  )}
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Negative Factors - Risk Drivers */}
                 {Array.isArray(prediction.riskFactors) && prediction.riskFactors.length > 0 && (
-                  <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/5 font-normal">
-                    {prediction.riskFactors[0]}
-                  </Badge>
+                  <div>
+                    <h4 className="text-xs font-semibold text-destructive mb-2 flex items-center">
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                      Risk Drivers ({prediction.riskFactors.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {prediction.riskFactors.slice(0, 3).map((f: any, i: number) => {
+                        const factor = isStructuredFactor(f) ? f : { factor: f, feature: 'unknown', impact: 'medium' as const, direction: 'negative' as const }
+                        return (
+                          <TooltipProvider key={i}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge
+                                  variant="outline"
+                                  className={`font-normal cursor-help ${getImpactColor(factor.impact)} border`}
+                                >
+                                  {factor.factor}
+                                  {getImpactIcon(factor.impact)}
+                                </Badge>
+                              </TooltipTrigger>
+                              {factor.feature !== 'unknown' && (
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <p className="text-xs">
+                                    <span className="font-semibold">Based on:</span> {factor.feature}
+                                  </p>
+                                  {factor.impact && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Impact: {factor.impact}
+                                    </p>
+                                  )}
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -311,7 +419,59 @@ export function ModelPrediction({
             <GovernmentSchemes schemes={prediction.schemes} applicationId={prediction.applicationId} referenceData={referenceData} />
           </CardContent>
         </Card>
-      </div >
-    </div >
+      </div>
+
+      {/* Counterfactual Guidance Card (Phase 2 - XAI Enhancement) */}
+      {prediction.improvement_recommendations && prediction.improvement_recommendations.length > 0 && (
+        <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+          <CardHeader>
+            <CardTitle className="flex items-center text-primary">
+              <Lightbulb className="w-5 h-5 mr-2" />
+              How to Improve Your Approval Chances
+            </CardTitle>
+            <CardDescription>
+              Actionable insights based on AI analysis of your application
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {prediction.improvement_recommendations.map((rec: ImprovementRecommendation, i: number) => (
+              <div key={i} className="p-4 bg-background rounded-lg border border-primary/20 hover:border-primary/40 transition-colors">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-2" >
+                  <Badge variant="secondary" className="w-fit capitalize">
+                    {rec.recommendation_type.replace(/_/g, ' ')}
+                  </Badge>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="text-right">
+                      <div className="text-muted-foreground text-xs">Current</div>
+                      <div className="font-bold">
+                        {rec.recommendation_type.includes('score') || rec.recommendation_type.includes('amount') || rec.recommendation_type.includes('income')
+                          ? `₹${rec.current_value.toLocaleString()}`
+                          : rec.current_value}
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-primary" />
+                    <div className="text-right">
+                      <div className="text-muted-foreground text-xs">Target</div>
+                      <div className="font-bold text-success">
+                        {rec.recommendation_type.includes('score') || rec.recommendation_type.includes('amount') || rec.recommendation_type.includes('income')
+                          ? `₹${rec.recommended_value.toLocaleString()}`
+                          : rec.recommended_value}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">{rec.message}</p>
+              </div>
+            ))}
+            <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-dashed">
+              <p className="text-xs text-muted-foreground flex items-start">
+                <Info className="w-3 h-3 mr-1 mt-0.5 shrink-0" />
+                <span>These recommendations are generated by AI analysis and may improve your approval likelihood. Results may vary based on lender policies.</span>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }

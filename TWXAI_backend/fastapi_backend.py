@@ -129,16 +129,29 @@ class SchemeRecommendationResult(BaseModel):
     scheme_name: str
     reason: str
 
+class ExplainabilityFactor(BaseModel):
+    factor: str
+    feature: str
+    impact: str  # high | medium | low
+    direction: str  # positive | negative
+
+class ImprovementRecommendation(BaseModel):
+    recommendation_type: str
+    current_value: float
+    recommended_value: float
+    message: str
+
 class ModelPrediction(BaseModel):
     application_id: str
     risk_score: float
     risk_band: str
     prediction: str  # approve/reject (based on ML prob)
     ml_probability: float  # Changed from confidence to match DB
-    positive_factors: List[str]
-    negative_factors: List[str]
+    positive_factors: List[ExplainabilityFactor]  # Changed from List[str] to structured objects
+    negative_factors: List[ExplainabilityFactor]  # Changed from List[str] to structured objects
     bank_suitability: List[BankSuitabilityResult]
     scheme_recommendations: List[SchemeRecommendationResult]  # Changed from schemes_suggested to match DB
+    improvement_recommendations: List[ImprovementRecommendation]  # NEW: Counterfactual guidance
     decision_summary: str
     timestamp: str
 
@@ -253,21 +266,201 @@ def preprocess_application(app: LoanApplication) -> pd.DataFrame:
             
     return df
 
-def get_risk_factors(app: LoanApplication, prob_approve: float, dti: float):
-    pos = []
-    neg = []
+def generate_explainability_factors(app: LoanApplication, prob_approve: float, dti: float):
+    """Generate structured XAI factors with feature attribution"""
+    pos_factors = []
+    neg_factors = []
     
-    if prob_approve > 0.7: pos.append("High model confidence")
-    if app.credit_score and app.credit_score > 750: pos.append("Excellent credit score")
-    if dti < 0.3: pos.append("Low debt-to-income ratio")
-    if app.income > 50000: pos.append("Healthy income level")
+    # Credit Score Analysis
+    if app.credit_score:
+        if app.credit_score >= 750:
+            pos_factors.append({
+                "factor": "Excellent credit score demonstrates strong repayment history",
+                "feature": "credit_score",
+                "impact": "high",
+                "direction": "positive"
+            })
+        elif app.credit_score >= 700:
+            pos_factors.append({
+                "factor": "Good credit score indicates reliable borrower",
+                "feature": "credit_score",
+                "impact": "medium",
+                "direction": "positive"
+            })
+        elif app.credit_score < 650:
+            neg_factors.append({
+                "factor": "Low credit score indicates higher default risk",
+                "feature": "credit_score",
+                "impact": "high",
+                "direction": "negative"
+            })
+    else:
+        neg_factors.append({
+            "factor": "No credit history available for assessment",
+            "feature": "credit_score",
+            "impact": "medium",
+            "direction": "negative"
+        })
     
-    if prob_approve < 0.5: neg.append("Model predicts default risk")
-    if app.credit_score and app.credit_score < 650: neg.append("Low credit score")
-    if dti > 0.5: neg.append("Critically high debt-to-income ratio")
-    if app.existing_emi > (app.income * 0.6): neg.append("Over-leveraged income")
+    # DTI Ratio Analysis
+    if dti < 0.3:
+        pos_factors.append({
+            "factor": "Low debt-to-income ratio shows healthy financial management",
+            "feature": "existing_emi",
+            "impact": "high",
+            "direction": "positive"
+        })
+    elif dti > 0.5:
+        neg_factors.append({
+            "factor": "High debt-to-income ratio increases default probability",
+            "feature": "existing_emi",
+            "impact": "high",
+            "direction": "negative"
+        })
+    
+    # Loan-to-Income Ratio
+    loan_to_income = app.loan_amount / app.income if app.income > 0 else 999
+    if loan_to_income > 8:
+        neg_factors.append({
+            "factor": "Loan amount significantly exceeds monthly income capacity",
+            "feature": "loan_amount",
+            "impact": "high",
+            "direction": "negative"
+        })
+    elif loan_to_income < 5:
+        pos_factors.append({
+            "factor": "Loan amount is reasonable relative to income",
+            "feature": "loan_amount",
+            "impact": "medium",
+            "direction": "positive"
+        })
+    
+    # Income Level
+    if app.income >= 50000:
+        pos_factors.append({
+            "factor": "Strong income level supports loan repayment capacity",
+            "feature": "income",
+            "impact": "medium",
+            "direction": "positive"
+        })
+    elif app.income < 20000:
+        neg_factors.append({
+            "factor": "Low income may limit repayment capacity",
+            "feature": "income",
+            "impact": "medium",
+            "direction": "negative"
+        })
+    
+    # Co-applicant/Co-signer
+    if app.has_co_signer:
+        pos_factors.append({
+            "factor": "Co-applicant reduces lender risk through shared responsibility",
+            "feature": "has_co_signer",
+            "impact": "medium",
+            "direction": "positive"
+        })
+    elif not app.has_co_signer and app.loan_amount > 500000:
+        neg_factors.append({
+            "factor": "Large loan without co-applicant increases risk profile",
+            "feature": "has_co_signer",
+            "impact": "medium",
+            "direction": "negative"
+        })
+    
+    # ML Model Confidence
+    if prob_approve > 0.7:
+        pos_factors.append({
+            "factor": "AI model shows high confidence in approval prediction",
+            "feature": "ml_probability",
+            "impact": "high",
+            "direction": "positive"
+        })
+    elif prob_approve < 0.5:
+        neg_factors.append({
+            "factor": "AI model predicts elevated default risk",
+            "feature": "ml_probability",
+            "impact": "high",
+            "direction": "negative"
+        })
+    
+    return pos_factors, neg_factors
 
-    return pos, neg
+def generate_improvement_recommendations(
+    app: LoanApplication, 
+    prob_approve: float, 
+    dti: float,
+    risk_band: str,
+    app_id: str
+) -> List[Dict[str, Any]]:
+    """
+    Generate counterfactual recommendations for loan approval improvement
+    Returns list of actionable recommendations with specific numeric targets
+    """
+    recommendations = []
+    
+    # Only generate recommendations for rejected or borderline cases
+    if prob_approve >= 0.7:
+        return recommendations  # Strong approval - no recommendations needed
+    
+    # 1. Reduce Loan Amount (if loan-to-income ratio is high)
+    loan_to_income = app.loan_amount / app.income if app.income > 0 else 999
+    if loan_to_income > 6:
+        # Calculate recommended loan amount (5x monthly income)
+        recommended_amount = int(app.income * 5)
+        recommendations.append({
+            "recommendation_type": "reduce_loan_amount",
+            "current_value": float(app.loan_amount),
+            "recommended_value": float(recommended_amount),
+            "message": f"Reducing loan amount to ₹{recommended_amount:,} (5× monthly income) significantly improves approval chances by lowering default risk."
+        })
+    
+    # 2. Improve Credit Score
+    if app.credit_score and app.credit_score < 700:
+        target_score = 700 if app.credit_score < 650 else 750
+        recommendations.append({
+            "recommendation_type": "improve_credit_score",
+            "current_value": float(app.credit_score),
+            "recommended_value": float(target_score),
+            "message": f"Improving credit score to {target_score}+ reduces perceived default risk and increases approval likelihood."
+        })
+    elif not app.credit_score:
+        recommendations.append({
+            "recommendation_type": "improve_credit_score",
+            "current_value": 0.0,
+            "recommended_value": 700.0,
+            "message": "Building a credit history with score 700+ significantly improves approval chances for institutional loans."
+        })
+    
+    # 3. Increase Income (if income is low relative to loan)
+    if app.income < 30000 and app.loan_amount > 200000:
+        target_income = int(app.loan_amount / 5)
+        recommendations.append({
+            "recommendation_type": "increase_income",
+            "current_value": float(app.income),
+            "recommended_value": float(target_income),
+            "message": f"Increasing monthly income to ₹{target_income:,} through additional income sources improves loan eligibility."
+        })
+    
+    # 4. Add Co-applicant
+    if not app.has_co_signer and (app.loan_amount > 500000 or risk_band == "high"):
+        recommendations.append({
+            "recommendation_type": "add_coapplicant",
+            "current_value": 0.0,
+            "recommended_value": 1.0,
+            "message": "Adding a co-applicant with stable income reduces lender risk and significantly improves approval chances."
+        })
+    
+    # 5. Wait Period (if recently employed or multiple recent applications)
+    if app.months_employed and app.months_employed < 6:
+        recommendations.append({
+            "recommendation_type": "wait_period",
+            "current_value": float(app.months_employed or 0),
+            "recommended_value": 12.0,
+            "message": "Waiting until 12+ months of employment establishes income stability and improves approval likelihood."
+        })
+    
+    # Limit to top 3 most impactful recommendations
+    return recommendations[:3]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -395,7 +588,7 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
     elif risk_score < 70: risk_band = "medium"
     else: risk_band = "high"
 
-    pos_factors, neg_factors = get_risk_factors(application, prob_approve, dti_val)
+    pos_factors, neg_factors = generate_explainability_factors(application, prob_approve, dti_val)
     
     # 4. Bank Suitability (PERSONALIZED LOGIC)
     bank_results = []
@@ -544,17 +737,54 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         logger.error(f"Scheme insert error: {e}")
 
     # 7. Insert Analysis Results (Source of Truth)
+    # Generate contextual decision summary
+    loan_to_income = application.loan_amount / application.income if application.income > 0 else 999
+    
+    if final_decision == "approve":
+        if prob_approve > 0.75:
+            decision_summary = f"Strong approval likelihood ({int(prob_approve*100)}%) based on excellent credit profile and low risk indicators."
+        else:
+            decision_summary = f"Moderate approval likelihood ({int(prob_approve*100)}%) - profile meets basic criteria with some areas of concern."
+    else:
+        # For rejections, highlight primary reason
+        if dti_val > 0.5:
+            decision_summary = f"Approval likelihood is low ({int(prob_approve*100)}%) due to high debt-to-income ratio - reducing existing obligations is recommended."
+        elif application.credit_score and application.credit_score < 650:
+            decision_summary = f"Approval likelihood is low ({int(prob_approve*100)}%) due to credit score below threshold - improving credit history is essential."
+        elif loan_to_income > 8:
+            decision_summary = f"Approval likelihood is low ({int(prob_approve*100)}%) due to loan amount significantly exceeding income capacity."
+        else:
+            decision_summary = f"Approval likelihood is low ({int(prob_approve*100)}%) based on overall risk assessment - review improvement recommendations."
+    
     # Mapping: confidence = prob_approve
     analysis_data = {
         "application_id": app_id,
         "risk_score": float(risk_score),
         "risk_band": risk_band,
         "ml_probability": float(prob_approve), # This IS the confidence
-        "decision_summary": f"AI predicted {final_decision.upper()} with {int(prob_approve*100)}% confidence.", 
+        "decision_summary": decision_summary,
         "positive_factors": json.loads(json.dumps(pos_factors)),
         "negative_factors": json.loads(json.dumps(neg_factors))
     }
     supabase.table("analysis_results").insert(analysis_data).execute()
+
+    # 8. Generate and Persist Improvement Recommendations
+    improvement_recs = generate_improvement_recommendations(
+        application, prob_approve, dti_val, risk_band, app_id
+    )
+
+    for rec in improvement_recs:
+        rec_data = {
+            "application_id": app_id,
+            "recommendation_type": rec["recommendation_type"],
+            "current_value": rec["current_value"],
+            "recommended_value": rec["recommended_value"],
+            "message": rec["message"]
+        }
+        try:
+            supabase.table("improvement_recommendations").insert(rec_data).execute()
+        except Exception as e:
+            logger.error(f"Failed to insert recommendation: {e}")
 
     # Sync Status
     supabase.table("loan_applications").update({"status": final_decision}).eq("id", app_id).execute()
@@ -570,7 +800,8 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         "negative_factors": neg_factors,
         "bank_suitability": bank_results,
         "scheme_recommendations": scheme_results,  # Changed from schemes_suggested to match DB
-        "decision_summary": analysis_data["decision_summary"],
+        "improvement_recommendations": improvement_recs,  # NEW: Counterfactual guidance
+        "decision_summary": decision_summary,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
