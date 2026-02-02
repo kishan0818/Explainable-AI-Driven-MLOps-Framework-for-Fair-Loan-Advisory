@@ -9,15 +9,17 @@ import { Badge } from "@/components/ui/badge"
 import { MessageCircle, Send, X, Bot, User, ExternalLink } from "lucide-react"
 // Local definitions to replace deleted mockdata
 const governmentSchemes = [
-  { id: "mudra", name: "MUDRA Loan", description: "Loans for small businesses" },
-  { id: "pmay", name: "PMAY (Housing)", description: "Affordable housing scheme" },
-  { id: "cgtsme", name: "CGTMSE", description: "Credit guarantee for MSEs" },
+  { id: "mudra", name: "MUDRA Loan", description: "Loans for small businesses", url: "https://www.mudra.org.in" },
+  { id: "pmay", name: "PMAY (Housing)", description: "Affordable housing scheme", url: "https://pmay-urban.gov.in" },
+  { id: "cgtsme", name: "CGTMSE", description: "Credit guarantee for MSEs", url: "https://www.cgtmse.in" },
 ]
 
 const rbiRules = [
-  { id: "psl", title: "Priority Sector Lending", description: "Mandatory lending to specific sectors" },
-  { id: "kyc", title: "KYC Norms", description: "Know Your Customer specifications" },
+  { id: "psl", title: "Priority Sector Lending", description: "Mandatory lending to specific sectors", url: "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12148" },
+  { id: "kyc", title: "KYC Norms", description: "Know Your Customer specifications", url: "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=10292" },
 ]
+// ... (omitted lines)
+
 
 function getChatbotResponse(input: string) {
   const lowerInput = input.toLowerCase()
@@ -106,55 +108,47 @@ export function Chatbot({ className = "" }: ChatbotProps) {
     setIsTyping(true)
 
     // Simulate typing delay
-    setTimeout(
-      () => {
-        const response = getChatbotResponse(inputValue)
-        let botResponse: Message
+    setIsTyping(true)
 
-        if (response) {
-          botResponse = {
-            id: (Date.now() + 1).toString(),
-            type: "bot",
-            content: response.answer,
-            timestamp: new Date(),
-            relatedSchemes: response.relatedSchemes,
-            relatedRules: response.relatedRules,
-          }
-        } else {
-          // Fallback response with scheme/rule suggestions
-          const relevantSchemes = findRelevantSchemes(inputValue)
-          const relevantRules = findRelevantRules(inputValue)
+    try {
+      // Call Real RAG Backend
+      const response = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: inputValue }),
+      })
 
-          let fallbackContent = "I understand you're asking about loan-related topics. "
+      let botResponse: Message
 
-          if (relevantSchemes.length > 0) {
-            fallbackContent += `I found ${relevantSchemes.length} relevant scheme(s) that might help you. `
-          }
-
-          if (relevantRules.length > 0) {
-            fallbackContent += `There are also ${relevantRules.length} relevant regulation(s) to consider. `
-          }
-
-          if (relevantSchemes.length === 0 && relevantRules.length === 0) {
-            fallbackContent +=
-              "Could you please rephrase your question? I can help with MUDRA loans, PMAY housing schemes, RBI regulations, loan eligibility, documentation requirements, and more."
-          }
-
-          botResponse = {
-            id: (Date.now() + 1).toString(),
-            type: "bot",
-            content: fallbackContent,
-            timestamp: new Date(),
-            relatedSchemes: relevantSchemes.slice(0, 3).map((s) => s.id),
-            relatedRules: relevantRules.slice(0, 3).map((r) => r.id),
-          }
+      if (response.ok) {
+        const data = await response.json()
+        botResponse = {
+          id: (Date.now() + 1).toString(),
+          type: "bot",
+          content: data.answer || "I couldn't generate a response.",
+          timestamp: new Date(),
+          relatedSchemes: data.related_schemes || [],
+          relatedRules: data.related_rules || [],
         }
+      } else {
+        throw new Error("API call failed")
+      }
 
-        setMessages((prev) => [...prev, botResponse])
-        setIsTyping(false)
-      },
-      1000 + Math.random() * 1000,
-    ) // Random delay between 1-2 seconds
+      setMessages((prev) => [...prev, botResponse])
+    } catch (error) {
+      console.error("Chat error:", error)
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "bot",
+        content: "Sorry, I'm having trouble connecting to the server. Please ensure the backend is running.",
+        timestamp: new Date()
+      }
+      setMessages((prev) => [...prev, errorResponse])
+    } finally {
+      setIsTyping(false)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -200,16 +194,16 @@ export function Chatbot({ className = "" }: ChatbotProps) {
             </div>
           </CardHeader>
 
-          <CardContent className="flex-1 flex flex-col p-0">
+          <CardContent className="flex-1 min-h-0 flex flex-col p-0">
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
               {messages.map((message) => (
                 <div key={message.id} className="space-y-2">
                   <div className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[80%] p-3 rounded-lg text-sm ${message.type === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
                         }`}
                     >
                       <div className="flex items-start space-x-2">
@@ -230,10 +224,18 @@ export function Chatbot({ className = "" }: ChatbotProps) {
                             {message.relatedSchemes.map((schemeId) => {
                               const scheme = getSchemeById(schemeId)
                               return scheme ? (
-                                <Badge key={schemeId} variant="outline" className="text-xs cursor-pointer">
-                                  <ExternalLink className="w-2 h-2 mr-1" />
-                                  {scheme.name}
-                                </Badge>
+                                <a
+                                  key={schemeId}
+                                  href={scheme.url || "#"}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="no-underline"
+                                >
+                                  <Badge variant="outline" className="text-xs cursor-pointer hover:bg-accent/50 transition-colors">
+                                    <ExternalLink className="w-2 h-2 mr-1" />
+                                    {scheme.name}
+                                  </Badge>
+                                </a>
                               ) : null
                             })}
                           </div>
@@ -247,10 +249,18 @@ export function Chatbot({ className = "" }: ChatbotProps) {
                             {message.relatedRules.map((ruleId) => {
                               const rule = getRuleById(ruleId)
                               return rule ? (
-                                <Badge key={ruleId} variant="secondary" className="text-xs cursor-pointer">
-                                  <ExternalLink className="w-2 h-2 mr-1" />
-                                  {rule.title}
-                                </Badge>
+                                <a
+                                  key={ruleId}
+                                  href={rule.url || "#"}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="no-underline"
+                                >
+                                  <Badge variant="secondary" className="text-xs cursor-pointer hover:bg-secondary/80 transition-colors">
+                                    <ExternalLink className="w-2 h-2 mr-1" />
+                                    {rule.title}
+                                  </Badge>
+                                </a>
                               ) : null
                             })}
                           </div>

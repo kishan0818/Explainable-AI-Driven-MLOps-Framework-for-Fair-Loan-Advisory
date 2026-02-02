@@ -77,7 +77,7 @@ export function ModelPrediction({
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       if (sessionError || !session?.access_token) throw new Error("Authentication error: Session expired")
 
-      const response = await fetch("http://127.0.0.1:8000/predict", {
+      const response = await fetch("http://localhost:8000/predict", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
         body: JSON.stringify(applicationData),

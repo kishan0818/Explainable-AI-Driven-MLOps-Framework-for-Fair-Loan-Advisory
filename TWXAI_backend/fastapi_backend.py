@@ -578,9 +578,9 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
 
     # Logic Fix: Penalize confidence if no Credit Score (User Request)
     if application.credit_score is None:
-        # Reduce approval probability by 10% to reflect uncertainty
+        # Reduce approval probability by 5% to reflect uncertainty (Relaxed from 10%)
         if prob_approve > 0.5:
-             prob_approve *= 0.9
+             prob_approve *= 0.95
              prob_reject = 1.0 - prob_approve
     
     risk_score = prob_reject * 100
@@ -680,42 +680,98 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
     # 5. Determine Final Decision & Schemes
     # Decision is APPROVE if ML Confident AND (High Suitability Bank OR Medium/Low Risk)
     
+    # Relaxed Decision Logic:
+    # Lower threshold to 0.45 (was 0.5)
+    
     ml_confidence_high = prob_approve > 0.6
     final_decision = "approve"
     
-    if prob_approve < 0.5:
+    if prob_approve < 0.45:
         final_decision = "reject"
     elif not has_high_suitability_bank and risk_band == "high":
+        # Even if > 0.45, if it's high risk calculate (likely <70 score), check if we can savage it
+        # If score is nearing 0.45, it means risk score is ~55 which is Medium. 
+        # High risk > 70 => prob_approve < 0.3. So this block handles contradictions if logic changes.
         final_decision = "reject"
         
-    # 6. Scheme Recommendations (If Rejected or High Risk or Logic match)
+    # 6. Scheme Recommendations (Strict Matching via rules.json)
     scheme_results = []
     # Always check schemes, but prioritize them if rejected
     try:
-        schemes = schemes_data.get("schemes", [])
+        schemes = schemes_data.get("schemes", [schemes_data]) if isinstance(schemes_data, list) else schemes_data.get("schemes", [])
+        
+        # Get Allowed Categories for this Loan Type from rules_data
+        # rules.json structure: "government_schemes_integration" -> "scheme_categories" -> { "category": ["id", ...] }
+        # Map canonical_loan_type to rules category keys
+        
+        loan_cat_map = {
+            "agriculture_loan": "agriculture_rural",
+            "msme_loan": "msme_business",
+            "home_loan": "housing",
+            "education_loan": "education",
+            # personal_loan maps to welfare schemes if applicable
+            "personal_loan": ["women_empowerment", "minority_welfare", "sc_st_welfare"] 
+        }
+        
+        target_cats = loan_cat_map.get(canonical_loan_type)
+        if isinstance(target_cats, str): target_cats = [target_cats]
+        elif target_cats is None: target_cats = []
+        
+        # Extract allowed scheme sub-IDs (e.g. "mudra_yojana") from rules
+        allowed_scheme_groups = []
+        scheme_cats_config = rules_data.get("government_schemes_integration", {}).get("scheme_categories", {})
+        
+        for cat in target_cats:
+            allowed_scheme_groups.extend(scheme_cats_config.get(cat, []))
+            
+        # Also need to match scheme.id against these groups OR scheme.category
+        
         for scheme in schemes:
-            # Basic matching logic
             is_match = False
             match_reason = ""
             
-            # Category Match
-            scheme_cat = scheme.get("category", "").lower() 
-            app_cat_map = {
-                "business": "enterprise", 
-                "msme_loan": "enterprise",
-                "agriculture_loan": "agricultur", 
-                "home_loan": "housing", 
-                "education_loan": "education", 
-                "personal_loan": "urban livelihood" 
-            }
-            required_cat = app_cat_map.get(canonical_loan_type, "general")
+            scheme_id = scheme.get("id", "").lower()
             
-            # Loose match
-            if required_cat in scheme_cat or scheme_cat == "general":
+            # 1. Direct Rule Match (Best)
+            # Check if scheme_id starts with any allowed group (e.g. matches 'mudra_shishu' to 'mudra_yojana' loosely or strict list?)
+            # The rules.json lists ["mudra_yojana", "cgtmse"] etc.
+            # schemes.json has ids "stand_up_india", "pmay_urban", "mudra_card", "pmmy" (Pradhan Mantri Mudra Yojana)
+            
+            # We do a containment check or keyword match against allowed groups
+            if any(group in scheme_id or group in scheme.get("name", "").lower().replace(" ", "_") for group in allowed_scheme_groups):
                 is_match = True
-                match_reason = f"Matches your loan category ({required_cat})"
+                match_reason = f"Recommended scheme for {canonical_loan_type.replace('_', ' ')}"
+            
+            # 2. Strict Category Backup
+            # If rules mapping missed it, check the scheme's internal category very strictly
+            if not is_match:
+                scheme_cat = scheme.get("category", "").lower()
+                clean_loan_type = canonical_loan_type.replace("_loan", "")
+                
+                # Only allow specific keywords
+                strict_keywords = {
+                    "home_loan": ["housing", "home"],
+                    "education_loan": ["education", "student"],
+                    "agriculture_loan": ["agriculture", "farmer", "crop"],
+                    "msme_loan": ["enterprise", "business", "msme", "mudra"],
+                    "personal_loan": ["livelihood", "skill", "inclusion"] # Very limited
+                }
+                
+                keywords = strict_keywords.get(canonical_loan_type, [])
+                if any(k in scheme_cat for k in keywords):
+                    is_match = True
+                     # Double check it is NOT conflicting (e.g. don't show business scheme for home loan)
+                    match_reason = f"Matches {clean_loan_type} category"
 
-            # If match, add it
+            # 3. Filter specific demographics (e.g. Women only schemes)
+            if is_match:
+                if "women" in scheme_id or "women" in scheme.get("name", "").lower():
+                     if application.gender and application.gender.lower() != "female":
+                         is_match = False # Gender mismatch
+                
+                # Check for SC/ST if available
+                # (Skipping complex demographic checks for now to avoid over-filtering, relying on main category)
+            
             if is_match:
                 # For API Response
                 api_rec = {
@@ -805,7 +861,101 @@ async def predict(application: LoanApplication, user_payload: dict = Depends(ver
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
+# --- RAG / Chatbot Route ---
+class ChatRequest(BaseModel):
+    query: str
+
+class ChatResponse(BaseModel):
+    answer: str
+    related_schemes: List[str] = []
+    related_rules: List[str] = []
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_rag(request: ChatRequest):
+    """
+    RAG Endpoint using Perplexity API
+    Context: rules.json and schemes.json
+    """
+    PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+    if not PERPLEXITY_API_KEY:
+        # Check .env.local if not in .env (hack for integration)
+        try:
+            with open("../.env.local", "r") as f:
+                for line in f:
+                    if "PERPLEXITY_API_KEY" in line:
+                         PERPLEXITY_API_KEY = line.split("=")[1].strip()
+                         break
+        except:
+             pass
+             
+    if not PERPLEXITY_API_KEY:
+        raise HTTPException(status_code=500, detail="Perplexity API Key missing")
+
+    # Prepare Context (summarized or full)
+    # We strip very large texts to save tokens if needed, but these files are small enough.
+    # Convert JSON to string
+    context_str = f"RULES_DATA: {json.dumps(rules_data)[:15000]}... \n SCHEMES_DATA: {json.dumps(schemes_data)[:10000]}..."
+    
+    system_prompt = f"""You are an intelligent assistant for a Loan Application Platform called TWXAI. 
+    You have access to the following OFFICIAL documents:
+    1. Rules Data (RBI guidelines, eligibility, compliance)
+    2. Government Schemes (Details of schemes like MUDRA, PMAY, etc.)
+    
+    CONTEXT:
+    {context_str}
+    
+    INSTRUCTIONS:
+    - Answer the user's query based strictly on the provided Context.
+    - If the user asks about eligibility, cite the specific rule or scheme.
+    - If the query is general (e.g. "What is a home loan?"), answer generally but mention relevant schemes if applicable.
+    - Be concise and professional.
+    """
+    
+    payload = {
+        "model": "sonar",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": request.query}
+        ]
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    answer = "I'm sorry, I couldn't process your request at the moment."
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post("https://api.perplexity.ai/chat/completions", json=payload, headers=headers, timeout=30.0)
+            
+        if resp.status_code == 200:
+            res_json = resp.json()
+            answer = res_json['choices'][0]['message']['content']
+        else:
+            logger.error(f"Perplexity API Error: {resp.text}")
+            answer = "I am currently unable to access the knowledge base. Please try again later."
+            
+    except Exception as e:
+        logger.error(f"RAG Error: {e}")
+        answer = "An error occurred while generating the response."
+
+    # Heuristic for related items
+    related_s = []
+    related_r = []
+    
+    lower_ans = answer.lower()
+    # Simple extraction of mentioned schemes
+    if "mudra" in lower_ans: related_s.append("mudra")
+    if "pmay" in lower_ans: related_s.append("pmay_urban")
+    
+    return {
+        "answer": answer,
+        "related_schemes": related_s,
+        "related_rules": related_r
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("fastapi_backend:app", host="0.0.0.0", port=8000, reload=True)
-

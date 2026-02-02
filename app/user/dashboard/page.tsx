@@ -44,7 +44,7 @@ export default function UserDashboard() {
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
 
-        fetch("http://127.0.0.1:8000/reference-data").then(r => r.json())
+        fetch("http://localhost:8000/reference-data").then(r => r.json())
       ])
 
       if (appRes.error) throw appRes.error
