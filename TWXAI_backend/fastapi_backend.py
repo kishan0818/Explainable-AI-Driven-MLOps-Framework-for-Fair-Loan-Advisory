@@ -156,6 +156,111 @@ class AnalysisResponse(BaseModel):
     scheme_recommendations: List[Dict[str, Any]]
     improvement_recommendations: List[Dict[str, Any]]
 
+class ChatRequest(BaseModel):
+    query: str
+
+class ChatResponse(BaseModel):
+    answer: str
+    related_schemes: List[str]
+    related_rules: List[str]
+
+# --- RAG Helper Functions ---
+
+def search_knowledge_base(query: str):
+    """
+    Search local JSONs for relevant context.
+    Simple keyword matching for Phase 1/2.
+    """
+    query_lower = query.lower()
+    context_chunks = []
+    related_schemes = []
+    related_rules = []
+    
+    # Search Schemes
+    if schemes_data and "schemes" in schemes_data:
+        for s in schemes_data["schemes"]:
+            # Match Name or Description or Category
+            text = f"{s.get('name', '')} {s.get('description', '')} {s.get('category', '')}".lower()
+            if any(term in text for term in query_lower.split()):
+                context_chunks.append(f"Scheme: {s.get('name')} (ID: {s.get('id')})\nDescription: {s.get('description')}\nEligibility: {json.dumps(s.get('eligibility'))}")
+                related_schemes.append(s.get('id'))
+                
+    # Search Rules
+    if rules_data and "rules" in rules_data:
+        for r in rules_data["rules"]:
+            text = f"{r.get('description', '')} {r.get('category', '')}".lower()
+            if any(term in text for term in query_lower.split()):
+                context_chunks.append(f"Rule: {r.get('description')} (ID: {r.get('id')})\nRegulatory Source: {r.get('regulatory_source')}")
+                related_rules.append(r.get('id'))
+                
+    # Limit Context
+    return "\n\n".join(context_chunks[:5]), list(set(related_schemes[:3])), list(set(related_rules[:3]))
+
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+
+async def call_perplexity_api(query: str, context: str):
+    """
+    Call Perplexity Sonar API for grounding answer.
+    """
+    if not PERPLEXITY_API_KEY:
+        logger.warning("Perplexity API Key missing!")
+        return "I'm sorry, I cannot access external knowledge right now related to the internet.", []
+        
+    url = "https://api.perplexity.ai/chat/completions"
+    
+    system_prompt = (
+        "You are an expert AI Loan Assistant for Indian government schemes and RBI regulations. "
+        "Answer the user's question using the provided Context and your own knowledge. "
+        "If the Context has relevant schemes or rules, explicitly mention them. "
+        "Keep the answer concise, professional, and helpful. "
+        "Do not hallucinate schemes not in context if they don't exist in reality. "
+        "GUARDRAILS: If the user asks about topics completely unrelated to loans, finance, banking, government schemes, or economic rules (e.g., coding, movies, general knowledge, chit-chat unrelated to finance), REFUSE to answer politely. "
+        "Say: 'I can only assist with government schemes, loan rules, and financial eligibility.'"
+    )
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}
+    ]
+    
+    payload = {
+        "model": "sonar",
+        "messages": messages,
+        "temperature": 0.2
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.post(url, json=payload, headers=headers, timeout=30.0)
+            if res.status_code == 200:
+                data = res.json()
+                return data['choices'][0]['message']['content']
+            else:
+                logger.error(f"Perplexity API Error: {res.text}")
+                return "I'm having trouble connecting to my knowledge base right now."
+        except Exception as e:
+            logger.error(f"Perplexity Connection Error: {e}")
+            return "I'm experiencing connectivity issues. Please try again later."
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(req: ChatRequest):
+    # 1. Search Local Knowledge
+    context, schemes, rules = search_knowledge_base(req.query)
+    
+    # 2. Call LLM
+    answer = await call_perplexity_api(req.query, context)
+    
+    return {
+        "answer": answer,
+        "related_schemes": schemes,
+        "related_rules": rules
+    }
+
 # --- Auth Helper ---
 async def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     token = credentials.credentials

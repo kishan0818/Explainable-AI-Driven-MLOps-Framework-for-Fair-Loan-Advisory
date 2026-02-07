@@ -93,6 +93,8 @@ export function Chatbot({ className = "" }: ChatbotProps) {
     scrollToBottom()
   }, [messages])
 
+  const [isExpanded, setIsExpanded] = useState(false)
+
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return
 
@@ -105,9 +107,6 @@ export function Chatbot({ className = "" }: ChatbotProps) {
 
     setMessages((prev) => [...prev, userMessage])
     setInputValue("")
-    setIsTyping(true)
-
-    // Simulate typing delay
     setIsTyping(true)
 
     try {
@@ -181,16 +180,34 @@ export function Chatbot({ className = "" }: ChatbotProps) {
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="absolute bottom-16 right-0 w-96 h-[500px] shadow-2xl border-2 flex flex-col">
-          <CardHeader className="pb-3 border-b">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center">
-                <Bot className="w-4 h-4 text-accent" />
+        <Card
+          className={`absolute bottom-16 right-0 shadow-2xl border-2 flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? "w-[600px] h-[80vh] max-h-[800px]" : "w-96 h-[500px]"
+            }`}
+        >
+          <CardHeader className="pb-3 border-b cursor-pointer" onDoubleClick={() => setIsExpanded(!isExpanded)}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-accent" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm">AI Loan Assistant</CardTitle>
+                  <CardDescription className="text-xs">Ask about schemes, rules & eligibility</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-sm">AI Loan Assistant</CardTitle>
-                <CardDescription className="text-xs">Ask about schemes, rules & eligibility</CardDescription>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setIsExpanded(!isExpanded)}
+                title={isExpanded ? "Minimize" : "Expand"}
+              >
+                {isExpanded ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-minimize-2"><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-maximize-2"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>
+                )}
+              </Button>
             </div>
           </CardHeader>
 
@@ -201,15 +218,15 @@ export function Chatbot({ className = "" }: ChatbotProps) {
                 <div key={message.id} className="space-y-2">
                   <div className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
                     <div
-                      className={`max-w-[80%] p-3 rounded-lg text-sm ${message.type === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
+                      className={`max-w-[85%] p-3 rounded-lg text-sm whitespace-pre-wrap break-words ${message.type === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
                         }`}
                     >
                       <div className="flex items-start space-x-2">
                         {message.type === "bot" && <Bot className="w-4 h-4 mt-0.5 flex-shrink-0" />}
                         {message.type === "user" && <User className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                        <div className="flex-1">{message.content}</div>
+                        <div className="flex-1 min-w-0">{message.content}</div>
                       </div>
                     </div>
                   </div>
