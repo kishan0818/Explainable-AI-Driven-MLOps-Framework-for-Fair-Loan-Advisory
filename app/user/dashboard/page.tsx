@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -229,8 +230,10 @@ export default function UserDashboard() {
             <p className="text-muted-foreground mt-1">Track your applications and explore schemes.</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setView('rules')}>
-              <BookOpen className="w-4 h-4 mr-2" /> View Government Rules & Schemes
+            <Button variant="outline" asChild>
+              <Link href="/government-schemes">
+                <BookOpen className="w-4 h-4 mr-2" /> View Government Rules & Schemes
+              </Link>
             </Button>
             <Button onClick={() => setView('new')}>
               <PlusCircle className="w-4 h-4 mr-2" /> New Application

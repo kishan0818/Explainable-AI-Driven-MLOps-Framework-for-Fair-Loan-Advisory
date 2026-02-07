@@ -794,7 +794,11 @@ def health():
 
 @app.get("/reference-data")
 def get_reference_data():
-    return {"bank_data": bank_loan_data, "schemes": schemes_data.get("schemes", [])}
+    return {
+        "bank_data": bank_loan_data, 
+        "schemes": schemes_data.get("schemes", []),
+        "rules": rules_data
+    }
 
 # --- Dev Helpers (Phase 1 Fix) ---
 @app.get("/dev/session")

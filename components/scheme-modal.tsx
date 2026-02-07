@@ -22,6 +22,9 @@ interface SchemeModalProps {
 export function SchemeModal({ scheme, trigger, isOpen, onOpenChange }: SchemeModalProps) {
     if (!scheme) return null
 
+    // Helper to safely access properties whether they are top-level (Global) or nested (Contextual)
+    const getProp = (key: string) => scheme[key] || scheme.eligibility?.[key]
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
