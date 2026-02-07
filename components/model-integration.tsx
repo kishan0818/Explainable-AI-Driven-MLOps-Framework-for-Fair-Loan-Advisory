@@ -87,6 +87,8 @@ export function ModelPrediction({
       console.log("ModelPrediction: Set Prediction", formattedResult)
       console.log("ModelPrediction: Banks", formattedResult.banks)
       console.log("ModelPrediction: Schemes", formattedResult.schemes)
+      console.log("ModelPrediction: RiskFactors", formattedResult.riskFactors)
+      console.log("ModelPrediction: PositiveFactors", formattedResult.positiveFactors)
       onPredictionComplete?.(formattedResult)
 
     } catch (error: any) {
@@ -157,9 +159,10 @@ export function ModelPrediction({
             <div>
               <h2 className="text-2xl font-bold">Risk Assessment</h2>
               <div className="flex items-center gap-2 mt-1">
-                {/* STRICT: Display backend value directly. If null/undefined, it breaks (intended validation), or we show '-' */}
-                <span className="text-muted-foreground font-medium">Score: {prediction.riskScore}/100</span>
-
+                {/* STRICT: Display backend value directly. */}
+                <span className="text-muted-foreground font-medium">
+                  Score: {prediction.riskScore !== undefined && prediction.riskScore !== null ? prediction.riskScore : "NA"}/100
+                </span>
                 {/* STRICT: Badge relies on backend riskBand. no fallback. */}
                 {prediction.riskBand ? (
                   <Badge variant={prediction.riskBand === 'low' ? 'outline' : prediction.riskBand === 'medium' ? 'secondary' : 'destructive'} className="uppercase">

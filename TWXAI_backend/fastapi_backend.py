@@ -242,7 +242,7 @@ def evaluate_banks(app: LoanApplication, dti: float, risk_band: str, canonical_t
         score = 50 # Base
         reasons = []
         
-        bank_name = bank.get('bank', 'Unknown Bank')
+        bank_name = bank.get('bank_name', 'Unknown Bank')
         
         # 1. Income Check
         # Simplified: Top tier banks prefer > 25k
@@ -483,17 +483,20 @@ def evaluate_schemes(app: LoanApplication):
             is_match = False
             
         if is_match:
-            # Look up name
+            # Look up name and URL
             s_name = scheme_id
+            s_url = ""
             for s in schemes_data.get("schemes", []):
                 if s.get("id") == scheme_id:
                     s_name = s.get("name")
+                    s_url = s.get("url", "")
                     break
             
             recommendations.append({
                 "scheme_id": scheme_id,
                 "scheme_name": s_name,
-                "reason": "Matched eligibility criteria"
+                "reason": "Matched eligibility criteria",
+                "url": s_url
             })
             
     return recommendations
@@ -750,7 +753,7 @@ def health():
 
 @app.get("/reference-data")
 def get_reference_data():
-    return {"bank_data": bank_loan_data, "schemes": []}
+    return {"bank_data": bank_loan_data, "schemes": schemes_data.get("schemes", [])}
 
 # --- Dev Helpers (Phase 1 Fix) ---
 @app.get("/dev/session")

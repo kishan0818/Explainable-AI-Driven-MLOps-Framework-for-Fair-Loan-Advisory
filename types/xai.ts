@@ -26,6 +26,7 @@ export interface Scheme {
     benefits: string[]
     eligibility_criteria: string[]
     application_link?: string
+    url?: string
 }
 
 // Canonical Analysis Result (Single Source of Truth)
