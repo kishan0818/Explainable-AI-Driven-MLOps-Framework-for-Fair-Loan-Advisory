@@ -475,13 +475,25 @@ def evaluate_schemes(app: LoanApplication):
         
         # Match against full type ("home_loan") OR simple type ("home")
         if req_types and start_type not in msg_types and simple_type not in msg_types and "all" not in msg_types:
+             logger.debug(f"Scheme {scheme_id} Rejected: Loan Type Mismatch ({start_type} vs {req_types})")
              is_match = False
              
-        # Income
+        # Income Check
         max_income = criteria.get("annual_income")
-        if max_income and app.income * 12 > max_income:
+        if is_match and max_income and app.income * 12 > max_income:
+            logger.debug(f"Scheme {scheme_id} Rejected: Income Too High ({app.income*12} > {max_income})")
             is_match = False
-            
+
+        # Max Loan Amount Check (Critical for Mudra)
+        # Note: In rules.json, max_loan_amount is a sibling of eligibility, but we access it via criteria = rule.get("eligibility")?
+        # WAIT: In rules.json, max_loan_amount is OUTSIDE eligibility object.
+        # We need to access it from `rule`, not `criteria`.
+        
+        max_loan = rule.get("max_loan_amount")
+        if is_match and max_loan and app.loan_amount > max_loan:
+             logger.debug(f"Scheme {scheme_id} Rejected: Loan Amount Too High ({app.loan_amount} > {max_loan})")
+             is_match = False
+             
         if is_match:
             # Look up name and URL
             s_name = scheme_id
@@ -498,7 +510,8 @@ def evaluate_schemes(app: LoanApplication):
                 "reason": "Matched eligibility criteria",
                 "url": s_url
             })
-            
+    
+    logger.info(f"Scheme Evaluation Complete. Found {len(recommendations)} matches.")
     return recommendations
 
 def build_explanation(risk_score, risk_band, rules_res, schemes_res, improvements):
@@ -676,24 +689,52 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
         raise HTTPException(status_code=500, detail="Database persistence failed")
         
     # B. Analysis Results
+    
+    # DB Constraints Safety (Calc before try to ensure available for fallback)
+    try:
+        safe_prob = max(0.0, min(1.0, float(ml_prob)))
+    except:
+        safe_prob = 0.0
+        
+    try:
+        safe_score = max(0, min(100, int(risk_score)))
+    except:
+        safe_score = 0
+        
+    safe_band = risk_band.lower()
+    if safe_band not in ['low', 'medium', 'high']:
+        safe_band = 'medium' # Safe fallback
+
     try:
         an_data = {
             "application_id": app_id,
-            "risk_score": risk_score,
-            "risk_band": risk_band,
-            "ml_probability": ml_prob,
-            # Phase 2.1: Semantic Check
-            # "prediction" schema suggests "approve"/"reject". 
-            # We keep "reject" value for backend logic/coloring but the text is "Advisory".
-            "prediction": "reject" if (risk_band == "high" or filtered_negative) else "approve",
+            "risk_score": safe_score,
+            "risk_band": safe_band,
+            "ml_probability": safe_prob,
             "decision_summary": explanation["summary"],
             "positive_factors": pos_factors,
             "negative_factors": neg_factors
         }
-        supabase.table("analysis_results").insert(an_data).execute()
-    except Exception as e:
-        logger.error(f"DB Write Error (Analysis): {e}")
+        logger.info(f"Inserting Analysis Data (Full): {an_data}")
+        res = supabase.table("analysis_results").insert(an_data).execute()
+        logger.info(f"Analysis Insert Success: {res}")
         
+    except Exception as e:
+        logger.error(f"DB Write Error (Full Analysis Payload Failed): {e}")
+        logger.info("Attempting Fallback Insert (Core Fields Only)...")
+        try:
+            # Fallback: Maybe columns are missing? Try core fields only.
+            fallback_data = {
+                "application_id": app_id,
+                "risk_score": safe_score,
+                "risk_band": safe_band,
+                "ml_probability": safe_prob
+            }
+            supabase.table("analysis_results").insert(fallback_data).execute()
+            logger.info("Fallback Insert Success (Risk Score Saved)")
+        except Exception as e2:
+             logger.error(f"DB Write Error (Fallback Failed): {e2}")
+
     # C. Banks
     if bank_results:
         for b in bank_results:

@@ -52,7 +52,20 @@ export default function UserDashboard() {
       setReferenceData(refRes) // Store reference data (Banks, Schemes, Loan Types)
 
       const formattedApps = appRes.data?.map(app => {
-        const analysis = app.analysis_results?.[0]
+        // Handle both Array (1:N) and Object (1:1) responses from Supabase
+        let analysis = null;
+        if (Array.isArray(app.analysis_results)) {
+          analysis = app.analysis_results[0];
+        } else if (app.analysis_results) {
+          analysis = app.analysis_results;
+        }
+
+        // DEBUG: Log analysis to find missing risk_score
+        if (analysis) {
+          console.log(`[Dashboard] App ${app.id.slice(0, 4)} Analysis Raw:`, analysis)
+        } else {
+          console.log(`[Dashboard] App ${app.id.slice(0, 4)} Analysis Missing! (Raw: ${JSON.stringify(app.analysis_results)})`)
+        }
 
         // STRICT: Source of truth is DB.
         // Status is app.status (which includes Bank Suitability logic from backend).
