@@ -344,6 +344,218 @@ def generate_improvements(app: LoanApplication, risk_score: float, dti: float):
 
 # --- Main Endpoint ---
 
+def evaluate_rules(app: LoanApplication):
+    """
+    Rules Engine (Phase 2)
+    Evaluates rules.json against application data
+    """
+    results = []
+    if not rules_data or "rules" not in rules_data:
+        return results
+
+    for rule in rules_data["rules"]:
+        outcome = "passed"
+        reason = "All conditions met"
+        
+        # Evaluate conditions
+        for cond in rule.get("conditions", []):
+            field = cond.get("field")
+            operator = cond.get("operator")
+            value = cond.get("value")
+            
+            # Map app fields to rule fields
+            app_val = None
+            if hasattr(app, field):
+                app_val = getattr(app, field)
+            elif field == "monthly_income": app_val = app.income / 12
+            elif field == "monthly_emi": app_val = app.existing_emi
+            elif field == "applicant_age": app_val = app.age
+            # Add more mappings as needed
+            
+            # Skip if field missing (or handle as fail/neutral?) 
+            # For now, if field missing, we skip condition or assume pass? 
+            # Strict mode: fail. Lenient: pass. Let's be lenient for optional fields.
+            if app_val is None: continue
+            
+            # Logic
+            matched = False
+            if operator == "eq": matched = (app_val == value)
+            elif operator == "gte": matched = (app_val >= value)
+            elif operator == "gt": matched = (app_val > value)
+            elif operator == "lte": matched = (app_val <= value)
+            elif operator == "lt": matched = (app_val < value)
+            elif operator == "in": matched = (app_val in value)
+            
+            if not matched:
+                outcome = "failed"
+                reason = f"Condition failed: {field} ({app_val}) {operator} {value}"
+                break
+        
+        # Add result
+        results.append({
+            "rule_id": rule.get("id"),
+            "description": rule.get("description"),
+            "status": outcome,
+            "severity": rule.get("severity", "soft"),
+            "reason": reason
+        })
+        
+    return results
+
+def evaluate_schemes(app: LoanApplication):
+    """
+    Scheme Engine (Phase 2)
+    Matches schemes.json eligibility
+    """
+    recommendations = []
+    if not schemes_data or "schemes" not in schemes_data:
+        return recommendations
+        
+    for scheme in schemes_data["schemes"]:
+        eligible = True
+        reasons = []
+        
+        # Check Eligibility Criteria
+        elig = scheme.get("eligibility", {})
+        
+        # 1. Loan Type ?? (Not strictly in Scheme JSON, but implied by categories)
+        # We'll skip loan type filter for now to show more results, or strict?
+        # Let's map category loosely.
+        
+        # 2. Beneficiary Attributes
+        desc = elig.get("beneficiaries", "").lower()
+        
+        # Gender Check
+        if "women" in desc and app.gender and app.gender.lower() != "female":
+             # Only strictly fail if EXCLUSIVE to women? 
+             # Usually "women entrepreneurs" implies women.
+             pass # Logic too fuzzy without structured data. 
+             
+        # Income/Amount Check?
+        # Hard to parse free text "eligibility". 
+        # Ideally schemes.json needs structured eligibility fields.
+        # But Phase 2 constraint: "Use existing DB schema/JSON".
+        # We will use simple keyword matching on description/eligibility text for now 
+        # OR hardcode logic for specific IDs if permissible. 
+        # DIRECTIVE says: "Match eligibility deterministically... Allowed: loan_type, income..."
+        
+        # Let's implement a safer, deterministic subset based on Schemes JSON "eligibility" dict if it existed structurely.
+        # Looking at schemes.json, "eligibility" is mostly text. 
+        # EXCEPT `government_schemes_integration` section in `rules.json` has `eligibility_matching_rules`.
+        # Wait, the instruction says "Load schemes.json". 
+        # BUT `rules.json` has `government_schemes_integration`.
+        # Let's use `rules.json` -> `government_schemes_integration` for matching logic 
+        # and `schemes.json` for details.
+        
+        pass 
+    
+    # REVISED STRATEGY for Schemes:
+    # `rules.json` contains `government_schemes_integration` with structured rules.
+    # We should use THAT to find eligible schemes, then look up details in `schemes.json`.
+    
+    match_rules = rules_data.get("government_schemes_integration", {}).get("eligibility_matching_rules", [])
+    
+    for rule in match_rules:
+        scheme_id = rule.get("scheme")
+        criteria = rule.get("eligibility", {})
+        
+        is_match = True
+        
+        # Loan Type
+        req_types = criteria.get("loan_type", [])
+        if isinstance(req_types, str): req_types = [req_types]
+        start_type = normalize_loan_type(app.loan_type)
+        # Normalize rule types?
+        # Simple check
+        msg_types = [t.lower() for t in req_types]
+        if req_types and start_type not in msg_types and "all" not in msg_types:
+             is_match = False
+             
+        # Income
+        max_income = criteria.get("annual_income")
+        if max_income and app.income * 12 > max_income:
+            is_match = False
+            
+        if is_match:
+            # Look up name
+            s_name = scheme_id
+            for s in schemes_data.get("schemes", []):
+                if s.get("id") == scheme_id:
+                    s_name = s.get("name")
+                    break
+            
+            recommendations.append({
+                "scheme_id": scheme_id,
+                "scheme_name": s_name,
+                "reason": "Matched eligibility criteria"
+            })
+            
+    return recommendations
+
+def build_explanation(risk_score, risk_band, rules_res, schemes_res, improvements):
+    """
+    Explanation Builder (Phase 2.1 - Enhanced)
+    Excludes PSL/Inclusion rules from negative factors.
+    Uses advisory language.
+    """
+    # 1. Identify and Filter Rules
+    # PSL/Inclusion categories that should NEVER be negative
+    inclusion_categories = ["psl_compliance", "constitutional_compliance", "weaker_sections", "inclusion"]
+    
+    # Helper to check if rule is inclusion-related
+    def is_inclusion_rule(r):
+        # Check explicit category
+        # Also check ID keywords if category missing? (e.g. "weaker_sections_...")
+        # Since we don't have category in the result dict (only id/desc/status/severity/reason), 
+        # we strictly rely on ID or we reload rules data? 
+        # Actually `evaluate_rules` returns a subset: id, description, status, severity, reason.
+        # It DOES NOT return category. 
+        # Critical Fix: We need to identify these rules. 
+        # Strategy: Checks for keywords in `rule_id` or `description`.
+        rid = r.get("rule_id", "").lower()
+        desc = r.get("description", "").lower()
+        
+        keywords = ["weaker_section", "sc_st", "transgender", "minority", "women", "inclusion", "constitutional", "senior", "handicap", "disability"]
+        return any(k in rid for k in keywords) or any(k in desc for k in keywords)
+
+    # Filter FAILED rules
+    # Only "Compliance" or "Risk" failures should be negative.
+    # "Inclusion" failures (e.g. not being SC/ST) are neutral.
+    all_failed = [r for r in rules_res if r['status'] == 'failed']
+    real_negative_rules = [r for r in all_failed if not is_inclusion_rule(r)]
+    
+    # PASSED rules
+    # Inclusion rules that Pass are POSITIVE factors (boosters)
+    all_passed = [r for r in rules_res if r['status'] == 'passed']
+    inclusion_passed = [r for r in all_passed if is_inclusion_rule(r)]
+    
+    failed_hard = [r for r in real_negative_rules if r['severity'] == 'hard']
+    failed_soft = [r for r in real_negative_rules if r['severity'] == 'soft']
+    
+    # 2. Build Decision Summary (Advisory Language)
+    summary = f"Risk Score: {int(risk_score)} ({risk_band.upper()}). "
+    
+    violation_count = len(failed_hard) + len(failed_soft)
+    
+    if failed_hard:
+        # Advisory wording for hard blocking rules
+        summary += f"Eligibility gaps detected due to {violation_count} rule violations."
+    elif risk_band == "high":
+        summary += "Not recommended under current eligibility conditions due to high risk factors."
+    elif violation_count > 0:
+        summary += f"Eligibility gaps detected due to {violation_count} rule violations."
+    else:
+        summary += "Application meets eligibility criteria."
+        
+    return {
+        "summary": summary,
+        "failed_rules_filtered": failed_hard + failed_soft, # Safe list for negative_factors
+        "passed_rules_boosters": inclusion_passed, # Add these to positive_factors
+        "passed_rules_count": len(all_passed)
+    }
+
+# --- Main Endpoint ---
+
 @app.post("/analyze-application", response_model=AnalysisResponse)
 async def analyze_application(app_in: LoanApplication, user_payload: dict = Depends(verify_token)):
     user_id = user_payload.get("sub")
@@ -410,15 +622,26 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
     # 6. Run Improvement Engine
     improvements = generate_improvements(app_in, risk_score, dti)
     
-    # 7. Schemes (Deferred)
-    schemes_res = [] # Deferred to Phase 2
+    # 7. Run Rules & Schemes (Phase 2)
+    rule_results = evaluate_rules(app_in)
+    schemes_res = evaluate_schemes(app_in)
     
-    # 8. Generate Summary & Factors
-    summary = f"Analyzed {canonical_type} request. Risk Score: {int(risk_score)}/100 ({risk_band.upper()}). ML Confidence: {int(ml_prob*100)}%."
-    pos_factors = [{"factor": "Income Sufficiency", "impact": "high", "direction": "positive"}] if app_in.income > 25000 else []
-    neg_factors = [{"factor": "High Risk Band", "impact": "high", "direction": "negative"}] if risk_band == "high" else []
+    # 8. Build Explanation (Phase 2.1)
+    explanation = build_explanation(risk_score, risk_band, rule_results, schemes_res, improvements)
     
-    # 9. Persist EVERYTHING (Transactional logic handled by separate inserts for now, simpler)
+    # Construct Factors
+    # Positive: Standard Phase 1 + Passed Boosters (PSL) + Other Passed Rules (Limit 5 generic)
+    boosters = [{"factor": f"Inclusion Algo: {r['description']}", "impact": "positive"} for r in explanation['passed_rules_boosters']]
+    generic_passed = [{"factor": f"Passed Rule: {r['description']}", "impact": "positive"} for r in rule_results if r['status'] == 'passed' and r not in explanation['passed_rules_boosters']][:3]
+    pos_factors = boosters + generic_passed 
+    if len(pos_factors) > 10: pos_factors = pos_factors[:10]
+    
+    # Negative: FILTERED Failures only (Never PSL)
+    filtered_negative = explanation['failed_rules_filtered']
+    neg_factors = [{"factor": f"Rule Violation: {r['description']}", "impact": "negative"} for r in filtered_negative]
+    if risk_band == "high": neg_factors.insert(0, {"factor": "High Risk Band", "impact": "negative"})
+    
+    # 9. Persist EVERYTHING
     
     # A. Loan Application
     try:
@@ -445,8 +668,11 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
             "risk_score": risk_score,
             "risk_band": risk_band,
             "ml_probability": ml_prob,
-            "prediction": "approve" if risk_band != "high" else "reject",
-            "decision_summary": summary,
+            # Phase 2.1: Semantic Check
+            # "prediction" schema suggests "approve"/"reject". 
+            # We keep "reject" value for backend logic/coloring but the text is "Advisory".
+            "prediction": "reject" if (risk_band == "high" or filtered_negative) else "approve",
+            "decision_summary": explanation["summary"],
             "positive_factors": pos_factors,
             "negative_factors": neg_factors
         }
@@ -457,10 +683,7 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
     # C. Banks
     if bank_results:
         for b in bank_results:
-            # Skip persistence for error/status states
-            if b['suitability'] == "bank_analysis_unavailable":
-                continue
-                
+            if b['suitability'] == "bank_analysis_unavailable": continue
             b_db = {
                 "application_id": app_id,
                 "bank_name": b['bank_name'],
@@ -483,17 +706,27 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
             try: supabase.table("improvement_recommendations").insert(i_db).execute()
             except: pass
             
-    # E. Schemes (Placeholder)
-    # Deferred
+    # E. Schemes (Phase 2 Active)
+    if schemes_res:
+        for s in schemes_res:
+            s_db = {
+                 "application_id": app_id,
+                 "scheme_id": s['scheme_id'],
+                 "scheme_name": s['scheme_name'],
+                 "reason": s['reason']
+            }
+            try: supabase.table("scheme_recommendations").insert(s_db).execute()
+            except Exception as e: 
+                logger.warning(f"Scheme Write Fail: {e}")
     
     return {
         "application_id": app_id,
         "risk_score": risk_score,
         "risk_band": risk_band,
         "ml_probability": ml_prob,
-        "decision_summary": summary,
-        "positive_factors": pos_factors,
-        "negative_factors": neg_factors,
+        "decision_summary": explanation["summary"],
+        "positive_factors": an_data["positive_factors"],
+        "negative_factors": an_data["negative_factors"],
         "bank_suitability": bank_results,
         "scheme_recommendations": schemes_res,
         "improvement_recommendations": improvements

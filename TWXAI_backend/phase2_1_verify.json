@@ -1,0 +1,43 @@
+{
+  "application_id": "phase2-1-verify-uuid",
+  "risk_score": 45.0,
+  "risk_band": "medium",
+  "ml_probability": 0.55,
+  "prediction": "reject",
+  "decision_summary": "Risk Score: 45 (MEDIUM). Eligibility gaps detected due to 4 rule violations.",
+  "positive_factors": [
+    {
+      "factor": "Passed Rule: RBI Digital Lending Guidelines - Processing fee and charge caps",
+      "impact": "positive"
+    },
+    {
+      "factor": "Passed Rule: Loan-to-Value ratio limits for vehicle loans",
+      "impact": "positive"
+    },
+    {
+      "factor": "Passed Rule: Co-applicant income clubbing rules for joint loans",
+      "impact": "positive"
+    }
+  ],
+  "negative_factors": [
+    {
+      "factor": "Rule Violation: Credit Score minimum thresholds based on loan type and amount (RBI Fair Practices Code)",
+      "impact": "negative"
+    },
+    {
+      "factor": "Rule Violation: Loan-to-Value ratio limits for home loans based on loan amount",
+      "impact": "negative"
+    },
+    {
+      "factor": "Rule Violation: Debt-to-Income ratio limits for different loan types",
+      "impact": "negative"
+    },
+    {
+      "factor": "Rule Violation: Minimum employment stability requirements by loan type",
+      "impact": "negative"
+    }
+  ],
+  "bank_suitability": [],
+  "scheme_recommendations": [],
+  "improvement_recommendations": []
+}
