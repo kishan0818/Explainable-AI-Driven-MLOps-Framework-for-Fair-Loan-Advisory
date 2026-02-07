@@ -405,59 +405,33 @@ def evaluate_rules(app: LoanApplication):
 
 def evaluate_schemes(app: LoanApplication):
     """
-    Scheme Engine (Phase 2)
-    Matches schemes.json eligibility
+    Scheme Engine (Phase 2 - Enhanced)
+    Matches schemes.json eligibility with smart mapping and fallback.
     """
     recommendations = []
     if not schemes_data or "schemes" not in schemes_data:
         return recommendations
+
+    # 1. ID Mapping (Rules ID -> Schemes ID)
+    SCHEME_ID_MAPPING = {
+        "mudra_shishu": "pmmy",
+        "mudra_kishore": "pmmy",
+        "mudra_tarun": "pmmy",
+        "mudra_yojana": "pmmy",
+        "pmay_urban_clss": "clss",
+        "standup_india_women": "standup_india",
+        "standup_india_scst": "standup_india",
+        "pmegp_service": "pmegp",
+        "pmegp_manufacturing": "pmegp"
+    }
         
-    for scheme in schemes_data["schemes"]:
-        eligible = True
-        reasons = []
-        
-        # Check Eligibility Criteria
-        elig = scheme.get("eligibility", {})
-        
-        # 1. Loan Type ?? (Not strictly in Scheme JSON, but implied by categories)
-        # We'll skip loan type filter for now to show more results, or strict?
-        # Let's map category loosely.
-        
-        # 2. Beneficiary Attributes
-        desc = elig.get("beneficiaries", "").lower()
-        
-        # Gender Check
-        if "women" in desc and app.gender and app.gender.lower() != "female":
-             # Only strictly fail if EXCLUSIVE to women? 
-             # Usually "women entrepreneurs" implies women.
-             pass # Logic too fuzzy without structured data. 
-             
-        # Income/Amount Check?
-        # Hard to parse free text "eligibility". 
-        # Ideally schemes.json needs structured eligibility fields.
-        # But Phase 2 constraint: "Use existing DB schema/JSON".
-        # We will use simple keyword matching on description/eligibility text for now 
-        # OR hardcode logic for specific IDs if permissible. 
-        # DIRECTIVE says: "Match eligibility deterministically... Allowed: loan_type, income..."
-        
-        # Let's implement a safer, deterministic subset based on Schemes JSON "eligibility" dict if it existed structurely.
-        # Looking at schemes.json, "eligibility" is mostly text. 
-        # EXCEPT `government_schemes_integration` section in `rules.json` has `eligibility_matching_rules`.
-        # Wait, the instruction says "Load schemes.json". 
-        # BUT `rules.json` has `government_schemes_integration`.
-        # Let's use `rules.json` -> `government_schemes_integration` for matching logic 
-        # and `schemes.json` for details.
-        
-        pass 
-    
     # REVISED STRATEGY for Schemes:
-    # `rules.json` contains `government_schemes_integration` with structured rules.
-    # We should use THAT to find eligible schemes, then look up details in `schemes.json`.
+    # Use rules.json's government_schemes_integration for strict eligibility.
     
     match_rules = rules_data.get("government_schemes_integration", {}).get("eligibility_matching_rules", [])
     
     for rule in match_rules:
-        scheme_id = rule.get("scheme")
+        rule_scheme_id = rule.get("scheme")
         criteria = rule.get("eligibility", {})
         
         is_match = True
@@ -475,44 +449,105 @@ def evaluate_schemes(app: LoanApplication):
         
         # Match against full type ("home_loan") OR simple type ("home")
         if req_types and start_type not in msg_types and simple_type not in msg_types and "all" not in msg_types:
-             logger.debug(f"Scheme {scheme_id} Rejected: Loan Type Mismatch ({start_type} vs {req_types})")
+             # logger.debug(f"Scheme {rule_scheme_id} Rejected: Loan Type Mismatch ({start_type} vs {req_types})")
              is_match = False
              
         # Income Check
         max_income = criteria.get("annual_income")
         if is_match and max_income and app.income * 12 > max_income:
-            logger.debug(f"Scheme {scheme_id} Rejected: Income Too High ({app.income*12} > {max_income})")
+            # logger.debug(f"Scheme {rule_scheme_id} Rejected: Income Too High ({app.income*12} > {max_income})")
             is_match = False
 
-        # Max Loan Amount Check (Critical for Mudra)
-        # Note: In rules.json, max_loan_amount is a sibling of eligibility, but we access it via criteria = rule.get("eligibility")?
-        # WAIT: In rules.json, max_loan_amount is OUTSIDE eligibility object.
-        # We need to access it from `rule`, not `criteria`.
-        
+        # Max Loan Amount Check
         max_loan = rule.get("max_loan_amount")
         if is_match and max_loan and app.loan_amount > max_loan:
-             logger.debug(f"Scheme {scheme_id} Rejected: Loan Amount Too High ({app.loan_amount} > {max_loan})")
+             # logger.debug(f"Scheme {rule_scheme_id} Rejected: Loan Amount Too High ({app.loan_amount} > {max_loan})")
              is_match = False
              
         if is_match:
-            # Look up name and URL
-            s_name = scheme_id
-            s_url = ""
+            # SMART LOOKUP
+            # 1. Try exact ID
+            # 2. Try Mapped ID
+            target_id = SCHEME_ID_MAPPING.get(rule_scheme_id, rule_scheme_id)
+            
+            s_details = None
             for s in schemes_data.get("schemes", []):
-                if s.get("id") == scheme_id:
-                    s_name = s.get("name")
-                    s_url = s.get("url", "")
+                if s.get("id") == target_id:
+                    s_details = s
                     break
             
+            if s_details:
+                recommendations.append({
+                    "scheme_id": target_id,
+                    "scheme_name": s_details.get("name"),
+                    "reason": f"Matched eligibility for {rule_scheme_id.replace('_', ' ').title()}",
+                    "url": s_details.get("url", ""),
+                    "description": s_details.get("description", "")
+                })
+            else:
+                # Fallback if details missing (should not happen if mapped correctly)
+                recommendations.append({
+                    "scheme_id": rule_scheme_id,
+                    "scheme_name": rule_scheme_id.replace("_", " ").title(), # Formatted ID as name
+                    "reason": "Matched eligibility criteria",
+                    "url": ""
+                })
+
+    # 2. FALLBACK STRATEGY (Force Recommend)
+    # If no schemes found (especially for High Risk), find a generic category match
+    if not recommendations:
+        logger.info("No strict scheme matches found. Triggering Fallback logic.")
+        
+        normalized_type = normalize_loan_type(app.loan_type).replace("_loan", "")
+        
+        # Priority mapping for fallback
+        CATEGORY_MAP = {
+            "business": ["Micro Enterprise Loans", "MSME"],
+            "msme": ["Micro Enterprise Loans", "MSME"],
+            "home": ["Housing Finance"],
+            "education": ["Education Loans"],
+            "agriculture": ["Agricultural Credit", "Agricultural Insurance"],
+            "personal": ["General"] # Hard to map personal, maybe generic
+        }
+        
+        target_categories = CATEGORY_MAP.get(normalized_type, [])
+        
+        fallback_scheme = None
+        
+        for s in schemes_data.get("schemes", []):
+            # Check if category matches (partial match)
+            s_cat = s.get("category", "")
+            if any(tc in s_cat for tc in target_categories):
+                 fallback_scheme = s
+                 break
+        
+        # If still nothing, just pick a popular one like Mudra if it's a business loan, or generic
+        if not fallback_scheme and normalized_type in ["business", "msme"]:
+             # Try finding PMMY directly
+             for s in schemes_data.get("schemes", []):
+                 if s.get("id") == "pmmy":
+                     fallback_scheme = s
+                     break
+                     
+        if fallback_scheme:
             recommendations.append({
-                "scheme_id": scheme_id,
-                "scheme_name": s_name,
-                "reason": "Matched eligibility criteria",
-                "url": s_url
+                "scheme_id": fallback_scheme.get("id"),
+                "scheme_name": fallback_scheme.get("name"),
+                "reason": "Recommended scheme for your loan category",
+                "url": fallback_scheme.get("url", ""),
+                "description": fallback_scheme.get("description", "")
             })
+
+    # Deduplicate by ID
+    unique_recs = []
+    seen_ids = set()
+    for r in recommendations:
+        if r["scheme_id"] not in seen_ids:
+            unique_recs.append(r)
+            seen_ids.add(r["scheme_id"])
     
-    logger.info(f"Scheme Evaluation Complete. Found {len(recommendations)} matches.")
-    return recommendations
+    logger.info(f"Scheme Evaluation Complete. Found {len(unique_recs)} matches.")
+    return unique_recs
 
 def build_explanation(risk_score, risk_band, rules_res, schemes_res, improvements):
     """
