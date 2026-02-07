@@ -155,6 +155,8 @@ class AnalysisResponse(BaseModel):
     bank_suitability: List[Dict[str, Any]]
     scheme_recommendations: List[Dict[str, Any]]
     improvement_recommendations: List[Dict[str, Any]]
+    confidence_score: float
+    data_completeness_score: float
 
 class ChatRequest(BaseModel):
     query: str
@@ -914,6 +916,13 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
             except Exception as e: 
                 logger.warning(f"Scheme Write Fail: {e}")
     
+    # 7. Calculate Confidence & Completeness
+    optional_fields = [app_in.credit_score, app_in.existing_emi, app_in.loan_purpose, app_in.employment_type]
+    filled_fields = sum(1 for f in optional_fields if f is not None)
+    completeness_score = (4 + filled_fields) / (4 + len(optional_fields)) * 100 
+    
+    confidence_score = min(max(completeness_score, 0), 100)
+
     return {
         "application_id": app_id,
         "risk_score": risk_score,
@@ -924,7 +933,9 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
         "negative_factors": an_data["negative_factors"],
         "bank_suitability": bank_results,
         "scheme_recommendations": schemes_res,
-        "improvement_recommendations": improvements
+        "improvement_recommendations": improvements,
+        "confidence_score": round(confidence_score, 1),
+        "data_completeness_score": round(completeness_score, 1)
     }
 
 # Keep old health check

@@ -11,6 +11,11 @@ import {
 import { supabase } from "@/lib/supabase/client"
 import { GovernmentSchemes } from "@/components/government-schemes"
 import type { AnalysisResult, ExplainabilityFactor } from "@/types/xai"
+import { ExplainabilityTimeline } from "@/components/explainability-timeline"
+import { ConfidenceMeter } from "@/components/confidence-meter"
+import { ImprovementAdvisor } from "@/components/improvement-advisor"
+import { SchemeComparison } from "@/components/scheme-comparison"
+import { ScenarioSimulator } from "@/components/scenario-simulator"
 
 interface ModelPredictionProps {
   applicationData?: any
@@ -53,9 +58,6 @@ export function ModelPrediction({
       const result = await response.json()
 
       // Map Backend Response to Canonical AnalysisResult
-      // STRICT: No auto-defaults here. We trust the backend payload structure.
-      // If specific fields like bands are missing, we let them fail or be null, but we don't inject constants.
-
       const banks = result.bank_suitability || []
       const schemes = result.scheme_recommendations || []
 
@@ -68,7 +70,7 @@ export function ModelPrediction({
         : []
 
       // Canonical Object
-      const formattedResult: AnalysisResult = {
+      const formattedResult: AnalysisResult & { confidence_score?: number } = {
         applicationId: result.application_id,
         prediction: result.prediction,
         ml_probability: result.ml_probability,
@@ -80,15 +82,11 @@ export function ModelPrediction({
         banks: banks,
         schemes: schemes,
         loanType: applicationData?.loan_type,
-        improvementRecommendations: result.improvementRecommendations || []
+        improvementRecommendations: result.improvementRecommendations || [],
+        confidence_score: result.confidence_score // Custom field for frontend
       }
 
       setPrediction(formattedResult)
-      console.log("ModelPrediction: Set Prediction", formattedResult)
-      console.log("ModelPrediction: Banks", formattedResult.banks)
-      console.log("ModelPrediction: Schemes", formattedResult.schemes)
-      console.log("ModelPrediction: RiskFactors", formattedResult.riskFactors)
-      console.log("ModelPrediction: PositiveFactors", formattedResult.positiveFactors)
       onPredictionComplete?.(formattedResult)
 
     } catch (error: any) {
@@ -143,7 +141,7 @@ export function ModelPrediction({
     )
   }
 
-  const isApproved = prediction.prediction === 'approve'
+  const isApproved = prediction.riskBand === 'low' || prediction.prediction === 'approve'
 
   // ---------------------------------------------------------
   // MAIN RENDER (Strict Data Only)
@@ -151,7 +149,7 @@ export function ModelPrediction({
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
 
-      {/* SECTION 1: RISK ASSESSMENT (Single Source of Truth) */}
+      {/* SECTION 1: RISK ASSESSMENT */}
       <Card className={`overflow-hidden border-t-4 ${isApproved ? 'border-t-success' : 'border-t-warning'}`}>
         <div className={`p-6 ${isApproved ? 'bg-success/5' : 'bg-warning/5'}`}>
           <div className="flex items-center gap-3 mb-4">
@@ -159,11 +157,9 @@ export function ModelPrediction({
             <div>
               <h2 className="text-2xl font-bold">Risk Assessment</h2>
               <div className="flex items-center gap-2 mt-1">
-                {/* STRICT: Display backend value directly. */}
                 <span className="text-muted-foreground font-medium">
                   Score: {prediction.riskScore !== undefined && prediction.riskScore !== null ? prediction.riskScore : "NA"}/100
                 </span>
-                {/* STRICT: Badge relies on backend riskBand. no fallback. */}
                 {prediction.riskBand ? (
                   <Badge variant={prediction.riskBand === 'low' ? 'outline' : prediction.riskBand === 'medium' ? 'secondary' : 'destructive'} className="uppercase">
                     {prediction.riskBand} Risk
@@ -173,125 +169,44 @@ export function ModelPrediction({
             </div>
           </div>
 
-          <p className="text-foreground text-lg leading-relaxed border-t pt-4 border-black/5">
-            {prediction.decisionSummary}
-          </p>
+          <div className="flex flex-col md:flex-row gap-6 mt-4">
+            <div className="flex-1">
+              <p className="text-foreground text-lg leading-relaxed">
+                {prediction.decisionSummary}
+              </p>
+            </div>
+            <div className="min-w-[250px]">
+              {/* Feature 3: Confidence Meter */}
+              <ConfidenceMeter score={(prediction as any).confidence_score || 85} />
+            </div>
+          </div>
         </div>
       </Card>
 
+      {/* Feature 4: Scenario Simulator (Demo Feature) */}
+      <ScenarioSimulator />
+
       <div className="grid md:grid-cols-2 gap-6">
-
-        {/* SECTION 2: WHAT WORKS IN YOUR FAVOR */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center text-success">
-              <CheckCircle className="w-5 h-5 mr-2" /> What Works in Your Favor
-            </CardTitle>
+        {/* SECTION 2 & 3: EXPLAINABILITY TIMELINE */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Factors Influencing Your Result</CardTitle>
           </CardHeader>
           <CardContent>
-            {(() => {
-              const INCLUSION_TERMS = ['transgender', 'sc/st', 'caste', 'women', 'senior', 'weaker section', 'inclusion', 'psl'];
-              const filteredPositive = (prediction.positiveFactors || []).filter((f: any) => {
-                const text = isStructuredFactor(f) ? f.factor : f;
-                const lower = text.toLowerCase();
-                return !INCLUSION_TERMS.some(term => lower.includes(term));
-              });
-
-              if (filteredPositive.length > 0) {
-                return (
-                  <ul className="space-y-3">
-                    {filteredPositive.map((f: any, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
-                        <CheckCircle className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                        <span>{isStructuredFactor(f) ? f.factor : f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                );
-              } else {
-                return <p className="text-sm text-muted-foreground italic">No specific positive factors identified.</p>;
-              }
-            })()}
-          </CardContent>
-        </Card>
-
-        {/* SECTION 3: ELIGIBILITY GAPS */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center text-warning-foreground">
-              <AlertTriangle className="w-5 h-5 mr-2" /> Eligibility Gaps
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {(() => {
-              const INCLUSION_TERMS = ['transgender', 'sc/st', 'caste', 'women', 'senior', 'weaker section', 'inclusion', 'psl'];
-              const filteredNegative = (prediction.riskFactors || []).filter((f: any) => {
-                const text = isStructuredFactor(f) ? f.factor : f;
-                const lower = text.toLowerCase();
-                return !INCLUSION_TERMS.some(term => lower.includes(term));
-              });
-
-              if (filteredNegative.length > 0) {
-                return (
-                  <ul className="space-y-3">
-                    {filteredNegative.map((f: any, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
-                        <AlertTriangle className="w-4 h-4 text-warning-foreground shrink-0 mt-0.5" />
-                        <span>{isStructuredFactor(f) ? f.factor : f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                );
-              } else {
-                return (
-                  <div className="flex items-center gap-2 text-success text-sm">
-                    <CheckCircle className="w-4 h-4" /> No critical eligibility gaps detected.
-                  </div>
-                );
-              }
-            })()}
+            <ExplainabilityTimeline
+              positiveFactors={prediction.positiveFactors || []}
+              negativeFactors={prediction.riskFactors || []}
+            />
           </CardContent>
         </Card>
       </div>
 
-      {/* SECTION 4: WHAT YOU CAN DO NEXT */}
+      {/* SECTION 4: IMPROVEMENT ADVISOR */}
       {prediction.improvementRecommendations && prediction.improvementRecommendations.length > 0 && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="flex items-center text-primary">
-              <Lightbulb className="w-5 h-5 mr-2" />
-              What You Can Do Next
-            </CardTitle>
-            <CardDescription>
-              Actionable steps to improve your profile's eligibility
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {prediction.improvementRecommendations.map((rec: any, i: number) => (
-              <div key={i} className="p-4 bg-background rounded-lg border shadow-sm hover:shadow-md transition-all">
-                <Badge variant="outline" className="mb-2 capitalize bg-muted/50">{rec.recommendation_type?.replace(/_/g, ' ')}</Badge>
-                <p className="text-sm font-medium mb-3 min-h-[40px]">{rec.message}</p>
-
-                {(rec.current_value !== undefined && rec.recommended_value !== undefined) && (
-                  <div className="flex items-center justify-between text-xs bg-muted/30 p-2 rounded">
-                    <div>
-                      <span className="text-muted-foreground block">Current</span>
-                      <span className="font-mono font-bold">{rec.current_value}</span>
-                    </div>
-                    <ArrowRight className="w-3 h-3 text-muted-foreground" />
-                    <div className="text-right">
-                      <span className="text-muted-foreground block">Target</span>
-                      <span className="font-mono font-bold text-success">{rec.recommended_value}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <ImprovementAdvisor recommendations={prediction.improvementRecommendations} />
       )}
 
-      {/* SECTION 5: SCHEMES & OPPORTUNITIES */}
+      {/* SECTION 5: SCHEMES */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -299,9 +214,13 @@ export function ModelPrediction({
             Schemes & Opportunities
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           {prediction.schemes && prediction.schemes.length > 0 ? (
-            <GovernmentSchemes schemes={prediction.schemes} applicationId={prediction.applicationId} referenceData={referenceData} />
+            <>
+              <GovernmentSchemes schemes={prediction.schemes} applicationId={prediction.applicationId} referenceData={referenceData} />
+              {/* Feature 2: Comparison Table */}
+              <SchemeComparison schemes={prediction.schemes} />
+            </>
           ) : (
             <div className="p-8 text-center bg-muted/20 rounded-lg border border-dashed">
               <p className="text-muted-foreground">No applicable government schemes found for this profile currently.</p>
@@ -337,7 +256,6 @@ export function ModelPrediction({
               </div>
             ))
           ) : (
-            // STRICT: Empty array means no criteria matched.
             <div className="p-4 bg-muted/20 rounded-lg text-sm text-center border border-dashed">
               <p className="text-muted-foreground">No banks closely match your profile yet.</p>
             </div>
