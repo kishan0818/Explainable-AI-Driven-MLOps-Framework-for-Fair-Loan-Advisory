@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 export default function DevTokenPage() {
     useEffect(() => {
         supabase.auth.getSession().then(({ data }) => {
-            console.log("ACCESS TOKEN:", data.session?.access_token);
+            // console.log("ACCESS TOKEN:", data.session?.access_token);
         });
     }, []);
 

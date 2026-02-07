@@ -232,7 +232,8 @@ def evaluate_banks(app: LoanApplication, dti: float, risk_band: str, canonical_t
             "score": 0
         }]
 
-    relevant_banks = [b for b in bank_profiles if b.get('loan_type') == canonical_type]
+    # Schema does not have loan_type, so we consider all seeded banks as relevant for now ( MVP )
+    relevant_banks = bank_profiles
     
     if not relevant_banks:
         return []
@@ -464,11 +465,16 @@ def evaluate_schemes(app: LoanApplication):
         # Loan Type
         req_types = criteria.get("loan_type", [])
         if isinstance(req_types, str): req_types = [req_types]
+        
+        # Normalize: "home_loan" -> "home" for matching rules.json
         start_type = normalize_loan_type(app.loan_type)
-        # Normalize rule types?
+        simple_type = start_type.replace("_loan", "")
+        
         # Simple check
         msg_types = [t.lower() for t in req_types]
-        if req_types and start_type not in msg_types and "all" not in msg_types:
+        
+        # Match against full type ("home_loan") OR simple type ("home")
+        if req_types and start_type not in msg_types and simple_type not in msg_types and "all" not in msg_types:
              is_match = False
              
         # Income
@@ -625,6 +631,11 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
     # 7. Run Rules & Schemes (Phase 2)
     rule_results = evaluate_rules(app_in)
     schemes_res = evaluate_schemes(app_in)
+    
+    logger.info(f"Analysis Debug - AppId: {user_id}")
+    logger.info(f"Banks Available in DB: {len(bank_profiles)}")
+    logger.info(f"Banks Matched: {len(bank_results)}")
+    logger.info(f"Schemes Matched: {len(schemes_res)}")
     
     # 8. Build Explanation (Phase 2.1)
     explanation = build_explanation(risk_score, risk_band, rule_results, schemes_res, improvements)

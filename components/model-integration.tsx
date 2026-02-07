@@ -4,23 +4,20 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
-  Brain, AlertTriangle, CheckCircle, BarChart3, Zap,
-  Building2, Lightbulb, FileText, Info, ArrowRight, ShieldCheck
+  Brain, AlertTriangle, CheckCircle, Zap,
+  Building2, Lightbulb, Info, ArrowRight, Wallet
 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { GovernmentSchemes } from "@/components/government-schemes"
-import type { ExplainabilityFactor, ImprovementRecommendation } from "@/types/xai"
+import type { AnalysisResult, ExplainabilityFactor } from "@/types/xai"
 
 interface ModelPredictionProps {
   applicationData?: any
-  onPredictionComplete?: (result: any) => void
-  initialResult?: any
+  onPredictionComplete?: (result: AnalysisResult) => void
+  initialResult?: AnalysisResult | null
   mode?: "predict" | "view"
-  referenceData?: any // Context from bank_loan_data.json
+  referenceData?: any
 }
 
 export function ModelPrediction({
@@ -31,45 +28,13 @@ export function ModelPrediction({
   referenceData
 }: ModelPredictionProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [prediction, setPrediction] = useState<any>(null)
+  const [prediction, setPrediction] = useState<AnalysisResult | null>(null)
 
   useEffect(() => {
     if (initialResult) {
-      // STRICT: Strict mapping from DB result. No recomputation.
-      const banks = initialResult.bank_suitability ?? []
-      const schemes = initialResult.scheme_recommendations ?? []
-
-      // Sort banks: High suitability first (Display Logic)
-      const sortedBanks = Array.isArray(banks) ? [...banks].sort((a: any, b: any) => {
-        const order = { high: 3, medium: 2, low: 1 }
-        return (order[b.suitability as keyof typeof order] || 0) - (order[a.suitability as keyof typeof order] || 0)
-      }) : []
-
-      setPrediction({
-        applicationId: initialResult.application_id,
-        prediction: initialResult.prediction,
-        // STRICT: Store exact DB field name, no renaming
-        ml_probability: initialResult.ml_probability,
-        riskBand: initialResult.risk_band,
-        riskScore: initialResult.risk_score,
-        // Preserve structured XAI data for rich UI (Phase 2)
-        positiveFactors: (initialResult.positive_factors ?? []).map((f: any) =>
-          typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'positive' } : f
-        ),
-        riskFactors: (initialResult.negative_factors ?? []).map((f: any) =>
-          typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'negative' } : f
-        ),
-        banks: sortedBanks,
-        schemes: schemes,
-        decisionSummary: initialResult.decision_summary,
-        // Helper for UI context (not DB data)
-        loanType: initialResult.loan_type
-      })
+      setPrediction(initialResult)
     }
   }, [initialResult])
-
-  // Removed old mapResultToState logic entirely
-
 
   const handlePredict = async () => {
     setIsLoading(true)
@@ -77,7 +42,7 @@ export function ModelPrediction({
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       if (sessionError || !session?.access_token) throw new Error("Authentication error: Session expired")
 
-      const response = await fetch("http://localhost:8000/predict", {
+      const response = await fetch("http://localhost:8000/analyze-application", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
         body: JSON.stringify(applicationData),
@@ -87,39 +52,41 @@ export function ModelPrediction({
 
       const result = await response.json()
 
-      // API result is now STRICT.
-      // Format consistent with what we expect in state
+      // Map Backend Response to Canonical AnalysisResult
+      // STRICT: No auto-defaults here. We trust the backend payload structure.
+      // If specific fields like bands are missing, we let them fail or be null, but we don't inject constants.
+
       const banks = result.bank_suitability || []
       const schemes = result.scheme_recommendations || []
 
-      // Preserve structured XAI data for rich UI (Phase 2)
+      // Adapt Factors
       const riskFactors = Array.isArray(result.negative_factors)
-        ? result.negative_factors.map((f: any) =>
-          typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'negative' } : f
-        )
+        ? result.negative_factors.map((f: any) => typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'negative' } : f)
         : []
       const positiveFactors = Array.isArray(result.positive_factors)
-        ? result.positive_factors.map((f: any) =>
-          typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'positive' } : f
-        )
+        ? result.positive_factors.map((f: any) => typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'positive' } : f)
         : []
 
-      // Sort banks
-      const sortedBanks = Array.isArray(banks) ? [...banks].sort((a: any, b: any) => {
-        const order = { high: 3, medium: 2, low: 1 }
-        return (order[b.suitability as keyof typeof order] || 0) - (order[a.suitability as keyof typeof order] || 0)
-      }) : []
-
-      const formattedResult = {
-        ...result,
-        banks: sortedBanks,
-        schemes: schemes,
-        riskFactors: riskFactors,
+      // Canonical Object
+      const formattedResult: AnalysisResult = {
+        applicationId: result.application_id,
+        prediction: result.prediction,
+        ml_probability: result.ml_probability,
+        riskBand: result.risk_band,
+        riskScore: result.risk_score,
         positiveFactors: positiveFactors,
-        loanType: applicationData?.loan_type
+        riskFactors: riskFactors,
+        decisionSummary: result.decision_summary,
+        banks: banks,
+        schemes: schemes,
+        loanType: applicationData?.loan_type,
+        improvementRecommendations: result.improvementRecommendations || []
       }
 
       setPrediction(formattedResult)
+      console.log("ModelPrediction: Set Prediction", formattedResult)
+      console.log("ModelPrediction: Banks", formattedResult.banks)
+      console.log("ModelPrediction: Schemes", formattedResult.schemes)
       onPredictionComplete?.(formattedResult)
 
     } catch (error: any) {
@@ -128,12 +95,6 @@ export function ModelPrediction({
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence > 0.8) return "text-success"
-    if (confidence > 0.6) return "text-warning"
-    return "text-destructive"
   }
 
   const getSuitabilityColor = (suitability: string) => {
@@ -145,30 +106,13 @@ export function ModelPrediction({
     }
   }
 
-  const getLoanContext = () => {
-    if (!referenceData?.bank_data?.loan_types || !prediction?.loanType) return null
-    return referenceData.bank_data.loan_types.find((l: any) => l.id === prediction.loanType)
-  }
-  const loanContext = getLoanContext()
-
-  // XAI UI Helpers (Phase 2)
-  const getImpactColor = (impact?: string) => {
-    switch (impact) {
-      case 'high': return 'border-destructive/50 bg-destructive/10 text-destructive ring-1 ring-destructive/30'
-      case 'medium': return 'border-warning/50 bg-warning/10 text-warning-foreground'
-      case 'low': return 'border-success/30 bg-success/5 text-success'
-      default: return 'border-muted bg-muted/30 text-muted-foreground'
-    }
-  }
-
-  const getImpactIcon = (impact?: string) => {
-    if (impact === 'high') return <Zap className="w-3 h-3 ml-1" />
-    return null
-  }
-
   const isStructuredFactor = (f: any): f is ExplainabilityFactor => {
     return f && typeof f === 'object' && 'factor' in f
   }
+
+  // ---------------------------------------------------------
+  // LOADING / EMPTY STATES
+  // ---------------------------------------------------------
 
   if (mode === 'predict' && !prediction) {
     return (
@@ -189,289 +133,215 @@ export function ModelPrediction({
     )
   }
 
-  if (!prediction) return null
+  if (!prediction) {
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        <p>Analysis data unavailable.</p>
+      </div>
+    )
+  }
 
   const isApproved = prediction.prediction === 'approve'
 
+  // ---------------------------------------------------------
+  // MAIN RENDER (Strict Data Only)
+  // ---------------------------------------------------------
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
 
-      {/* 1. Main Decision Card */}
+      {/* SECTION 1: RISK ASSESSMENT (Single Source of Truth) */}
       <Card className={`overflow-hidden border-t-4 ${isApproved ? 'border-t-success' : 'border-t-warning'}`}>
-        <div className={`p-6 ${isApproved ? 'bg-success/10' : 'bg-warning/10'} flex flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
-          <div>
-            <h2 className="text-2xl font-bold flex items-center">
-              {isApproved ? <CheckCircle className="w-6 h-6 mr-2 text-success" /> : <Info className="w-6 h-6 mr-2 text-warning-foreground" />}
-              {isApproved ? "Eligible for Approval" : "Needs Profile Improvement"}
-            </h2>
-            <p className="text-muted-foreground mt-1">
-              {isApproved
-                ? "Your profile matches our primary lending criteria."
-                : "Based on current inputs, standard approval is difficult. See options below."}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {/* If Rejected, Show Eligibility Check Button instead of simple badge */}
-            {!isApproved && (
-              <Button variant="outline" className="bg-background text-warning-foreground border-warning-foreground/20">
-                Eligibility Review
-              </Button>
-            )}
-            <Badge variant={isApproved ? "default" : "secondary"} className="h-8 px-3 text-sm">
-              {typeof prediction.ml_probability === "number" && !isNaN(prediction.ml_probability)
-                ? `${Math.round(prediction.ml_probability * 100)}% Match`
-                : "Match unavailable"}
-            </Badge>
-          </div>
-        </div>
-
-        {/* Actionable Next Steps for Improvement */}
-        {!isApproved && (
-          <div className="bg-warning/5 border-t border-warning/10 p-4">
-            <h4 className="font-semibold text-sm mb-2 flex items-center">
-              <Lightbulb className="w-4 h-4 mr-2 text-warning-foreground" />
-              What You Can Do Next
-            </h4>
-            <div className="grid md:grid-cols-3 gap-4 text-sm text-muted-foreground">
-              <div className="flex gap-2">
-                <span className="text-primary font-bold">1.</span>
-                <span>Improve your credit score (pay existing dues).</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-primary font-bold">2.</span>
-                <span>Reduce loan amount or increase tenure.</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-primary font-bold">3.</span>
-                <span>Consider adding a co-applicant with income.</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <CardContent className="pt-6">
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Summary Section */}
+        <div className={`p-6 ${isApproved ? 'bg-success/5' : 'bg-warning/5'}`}>
+          <div className="flex items-center gap-3 mb-4">
+            {isApproved ? <CheckCircle className="w-8 h-8 text-success" /> : <Info className="w-8 h-8 text-warning-foreground" />}
             <div>
-              <h3 className="font-semibold flex items-center mb-2">
-                <ShieldCheck className="w-4 h-4 mr-2" /> Analysis Summary
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                {prediction.decisionSummary || `Your profile has been analyzed against 15+ banking parameters including income stability, credit history, and debt-to-income ratio.`}
-              </p>
+              <h2 className="text-2xl font-bold">Risk Assessment</h2>
+              <div className="flex items-center gap-2 mt-1">
+                {/* STRICT: Display backend value directly. If null/undefined, it breaks (intended validation), or we show '-' */}
+                <span className="text-muted-foreground font-medium">Score: {prediction.riskScore}/100</span>
 
-              {/* Enhanced XAI Factor Display (Phase 2) */}
-              <div className="space-y-3">
-                {/* Positive Factors - Approval Drivers */}
-                {Array.isArray(prediction.positiveFactors) && prediction.positiveFactors.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-semibold text-success mb-2 flex items-center">
-                      <CheckCircle className="w-3 h-3 mr-1" />
-                      Approval Drivers ({prediction.positiveFactors.length})
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {prediction.positiveFactors.slice(0, 3).map((f: any, i: number) => {
-                        const factor = isStructuredFactor(f) ? f : { factor: f, feature: 'unknown', impact: 'medium' as const, direction: 'positive' as const }
-                        return (
-                          <TooltipProvider key={i}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge
-                                  variant="outline"
-                                  className={`font-normal cursor-help ${getImpactColor(factor.impact)} border`}
-                                >
-                                  {factor.factor}
-                                  {getImpactIcon(factor.impact)}
-                                </Badge>
-                              </TooltipTrigger>
-                              {factor.feature !== 'unknown' && (
-                                <TooltipContent side="top" className="max-w-xs">
-                                  <p className="text-xs">
-                                    <span className="font-semibold">Based on:</span> {factor.feature}
-                                  </p>
-                                  {factor.impact && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Impact: {factor.impact}
-                                    </p>
-                                  )}
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Negative Factors - Risk Drivers */}
-                {Array.isArray(prediction.riskFactors) && prediction.riskFactors.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-semibold text-destructive mb-2 flex items-center">
-                      <AlertTriangle className="w-3 h-3 mr-1" />
-                      Risk Drivers ({prediction.riskFactors.length})
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {prediction.riskFactors.slice(0, 3).map((f: any, i: number) => {
-                        const factor = isStructuredFactor(f) ? f : { factor: f, feature: 'unknown', impact: 'medium' as const, direction: 'negative' as const }
-                        return (
-                          <TooltipProvider key={i}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge
-                                  variant="outline"
-                                  className={`font-normal cursor-help ${getImpactColor(factor.impact)} border`}
-                                >
-                                  {factor.factor}
-                                  {getImpactIcon(factor.impact)}
-                                </Badge>
-                              </TooltipTrigger>
-                              {factor.feature !== 'unknown' && (
-                                <TooltipContent side="top" className="max-w-xs">
-                                  <p className="text-xs">
-                                    <span className="font-semibold">Based on:</span> {factor.feature}
-                                  </p>
-                                  {factor.impact && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Impact: {factor.impact}
-                                    </p>
-                                  )}
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                {/* STRICT: Badge relies on backend riskBand. no fallback. */}
+                {prediction.riskBand ? (
+                  <Badge variant={prediction.riskBand === 'low' ? 'outline' : prediction.riskBand === 'medium' ? 'secondary' : 'destructive'} className="uppercase">
+                    {prediction.riskBand} Risk
+                  </Badge>
+                ) : null}
               </div>
             </div>
-
-            {/* Context Accordion (New Feature) */}
-            {loanContext && (
-              <div className="bg-muted/30 rounded-lg p-1">
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="item-1" className="border-none">
-                    <AccordionTrigger className="px-4 py-2 text-sm font-medium hover:no-underline">
-                      View Eligibility & Documents for {loanContext.name}
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 text-sm text-muted-foreground space-y-3">
-                      <div>
-                        <strong className="text-foreground block mb-1">Best For:</strong>
-                        {loanContext.best_for}
-                      </div>
-                      <div>
-                        <strong className="text-foreground block mb-1">Documents Required:</strong>
-                        <ul className="list-disc list-inside">
-                          {loanContext.documents_required?.slice(0, 3).map((d: string, i: number) => <li key={i}>{d}</li>)}
-                        </ul>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </div>
-            )}
           </div>
-        </CardContent>
+
+          <p className="text-foreground text-lg leading-relaxed border-t pt-4 border-black/5">
+            {prediction.decisionSummary}
+          </p>
+        </div>
       </Card>
 
-      {/* 2. Bank Recommendations */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Building2 className="w-5 h-5 mr-2 text-primary" />
-              Banking Partners
+      <div className="grid md:grid-cols-2 gap-6">
+
+        {/* SECTION 2: WHAT WORKS IN YOUR FAVOR */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center text-success">
+              <CheckCircle className="w-5 h-5 mr-2" /> What Works in Your Favor
             </CardTitle>
-            <CardDescription>
-              {prediction.banks.length > 0 ? "Banks that match your profile" : "No direct bank matches found closest to your profile"}
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {prediction.banks.length > 0 ? (
-              prediction.banks.map((bank: any, idx: number) => (
-                <div key={idx} className={`group p-4 rounded-xl border transition-all ${getSuitabilityColor(bank.suitability)}`}>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-bold text-lg">{bank.bank_name}</div>
-                      <div className="text-sm mt-1 flex items-center text-muted-foreground">
-                        <Info className="w-3 h-3 mr-1" /> {bank.reason}
-                      </div>
-                    </div>
-                    <Badge className={bank.suitability === 'high' ? 'bg-success' : bank.suitability === 'medium' ? 'bg-warning' : 'bg-muted text-muted-foreground'}>
-                      {bank.suitability.toUpperCase()} Match
-                    </Badge>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-4 bg-muted rounded-lg text-sm text-center">
-                Standard bank financing might be limited. Please check government schemes.
-              </div>
-            )}
+          <CardContent>
+            {(() => {
+              const INCLUSION_TERMS = ['transgender', 'sc/st', 'caste', 'women', 'senior', 'weaker section', 'inclusion', 'psl'];
+              const filteredPositive = (prediction.positiveFactors || []).filter((f: any) => {
+                const text = isStructuredFactor(f) ? f.factor : f;
+                const lower = text.toLowerCase();
+                return !INCLUSION_TERMS.some(term => lower.includes(term));
+              });
+
+              if (filteredPositive.length > 0) {
+                return (
+                  <ul className="space-y-3">
+                    {filteredPositive.map((f: any, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
+                        <CheckCircle className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                        <span>{isStructuredFactor(f) ? f.factor : f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              } else {
+                return <p className="text-sm text-muted-foreground italic">No specific positive factors identified.</p>;
+              }
+            })()}
           </CardContent>
         </Card>
 
-        {/* 3. Government Schemes (Contextual) */}
-        <Card className={`h-full ${!isApproved ? 'ring-2 ring-primary/20 shadow-lg' : ''}`}>
-          <CardContent className="pt-6">
-            <GovernmentSchemes schemes={prediction.schemes} applicationId={prediction.applicationId} referenceData={referenceData} />
+        {/* SECTION 3: ELIGIBILITY GAPS */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center text-warning-foreground">
+              <AlertTriangle className="w-5 h-5 mr-2" /> Eligibility Gaps
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const INCLUSION_TERMS = ['transgender', 'sc/st', 'caste', 'women', 'senior', 'weaker section', 'inclusion', 'psl'];
+              const filteredNegative = (prediction.riskFactors || []).filter((f: any) => {
+                const text = isStructuredFactor(f) ? f.factor : f;
+                const lower = text.toLowerCase();
+                return !INCLUSION_TERMS.some(term => lower.includes(term));
+              });
+
+              if (filteredNegative.length > 0) {
+                return (
+                  <ul className="space-y-3">
+                    {filteredNegative.map((f: any, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
+                        <AlertTriangle className="w-4 h-4 text-warning-foreground shrink-0 mt-0.5" />
+                        <span>{isStructuredFactor(f) ? f.factor : f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              } else {
+                return (
+                  <div className="flex items-center gap-2 text-success text-sm">
+                    <CheckCircle className="w-4 h-4" /> No critical eligibility gaps detected.
+                  </div>
+                );
+              }
+            })()}
           </CardContent>
         </Card>
       </div>
 
-      {/* Counterfactual Guidance Card (Phase 2 - XAI Enhancement) */}
-      {prediction.improvement_recommendations && prediction.improvement_recommendations.length > 0 && (
-        <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+      {/* SECTION 4: WHAT YOU CAN DO NEXT */}
+      {prediction.improvementRecommendations && prediction.improvementRecommendations.length > 0 && (
+        <Card className="border-primary/20 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex items-center text-primary">
               <Lightbulb className="w-5 h-5 mr-2" />
-              How to Improve Your Approval Chances
+              What You Can Do Next
             </CardTitle>
             <CardDescription>
-              Actionable insights based on AI analysis of your application
+              Actionable steps to improve your profile's eligibility
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {prediction.improvement_recommendations.map((rec: ImprovementRecommendation, i: number) => (
-              <div key={i} className="p-4 bg-background rounded-lg border border-primary/20 hover:border-primary/40 transition-colors">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-2" >
-                  <Badge variant="secondary" className="w-fit capitalize">
-                    {rec.recommendation_type.replace(/_/g, ' ')}
-                  </Badge>
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="text-right">
-                      <div className="text-muted-foreground text-xs">Current</div>
-                      <div className="font-bold">
-                        {rec.recommendation_type.includes('score') || rec.recommendation_type.includes('amount') || rec.recommendation_type.includes('income')
-                          ? `₹${rec.current_value.toLocaleString()}`
-                          : rec.current_value}
-                      </div>
+          <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {prediction.improvementRecommendations.map((rec: any, i: number) => (
+              <div key={i} className="p-4 bg-background rounded-lg border shadow-sm hover:shadow-md transition-all">
+                <Badge variant="outline" className="mb-2 capitalize bg-muted/50">{rec.recommendation_type?.replace(/_/g, ' ')}</Badge>
+                <p className="text-sm font-medium mb-3 min-h-[40px]">{rec.message}</p>
+
+                {(rec.current_value !== undefined && rec.recommended_value !== undefined) && (
+                  <div className="flex items-center justify-between text-xs bg-muted/30 p-2 rounded">
+                    <div>
+                      <span className="text-muted-foreground block">Current</span>
+                      <span className="font-mono font-bold">{rec.current_value}</span>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-primary" />
+                    <ArrowRight className="w-3 h-3 text-muted-foreground" />
                     <div className="text-right">
-                      <div className="text-muted-foreground text-xs">Target</div>
-                      <div className="font-bold text-success">
-                        {rec.recommendation_type.includes('score') || rec.recommendation_type.includes('amount') || rec.recommendation_type.includes('income')
-                          ? `₹${rec.recommended_value.toLocaleString()}`
-                          : rec.recommended_value}
-                      </div>
+                      <span className="text-muted-foreground block">Target</span>
+                      <span className="font-mono font-bold text-success">{rec.recommended_value}</span>
                     </div>
                   </div>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">{rec.message}</p>
+                )}
               </div>
             ))}
-            <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-dashed">
-              <p className="text-xs text-muted-foreground flex items-start">
-                <Info className="w-3 h-3 mr-1 mt-0.5 shrink-0" />
-                <span>These recommendations are generated by AI analysis and may improve your approval likelihood. Results may vary based on lender policies.</span>
-              </p>
-            </div>
           </CardContent>
         </Card>
       )}
+
+      {/* SECTION 5: SCHEMES & OPPORTUNITIES */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Building2 className="w-5 h-5 mr-2 text-primary" />
+            Schemes & Opportunities
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {prediction.schemes && prediction.schemes.length > 0 ? (
+            <GovernmentSchemes schemes={prediction.schemes} applicationId={prediction.applicationId} referenceData={referenceData} />
+          ) : (
+            <div className="p-8 text-center bg-muted/20 rounded-lg border border-dashed">
+              <p className="text-muted-foreground">No applicable government schemes found for this profile currently.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* SECTION 6: BANKING PARTNERS */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Wallet className="w-5 h-5 mr-2" />
+            Banking Partners
+          </CardTitle>
+          <CardDescription>Lenders whose criteria match your profile</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {prediction.banks && prediction.banks.length > 0 ? (
+            prediction.banks.map((bank: any, idx: number) => (
+              <div key={idx} className={`group p-4 rounded-xl border transition-all ${getSuitabilityColor(bank.suitability)}`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-bold text-lg">{bank.bank_name}</div>
+                    <div className="text-sm mt-1 flex items-center text-muted-foreground">
+                      <Info className="w-3 h-3 mr-1" /> {bank.reason}
+                    </div>
+                  </div>
+                  <Badge className={bank.suitability === 'high' ? 'bg-success' : bank.suitability === 'medium' ? 'bg-warning' : 'bg-muted text-muted-foreground'}>
+                    {bank.suitability.toUpperCase()} Match
+                  </Badge>
+                </div>
+              </div>
+            ))
+          ) : (
+            // STRICT: Empty array means no criteria matched.
+            <div className="p-4 bg-muted/20 rounded-lg text-sm text-center border border-dashed">
+              <p className="text-muted-foreground">No banks closely match your profile yet.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
     </div>
   )
 }

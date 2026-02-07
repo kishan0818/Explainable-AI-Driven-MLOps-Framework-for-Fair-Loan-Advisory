@@ -1,150 +1,23 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
-import { Search, BookOpen, Shield, Building2, Users, FileText, ExternalLink } from "lucide-react"
-import { SchemeModal } from "@/components/scheme-modal"
-import { LoanTypeModal } from "@/components/loan-type-modal"
+import { Building2 } from "lucide-react"
 
 interface RulesAndSchemesEngineProps {
   referenceData?: any
 }
 
 export function RulesAndSchemesEngine({ referenceData }: RulesAndSchemesEngineProps) {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedItem, setSelectedItem] = useState<any | null>(null)
-
-  // Use passed referenceData or fallback (empty)
-  const schemes = referenceData?.schemes || []
-  // We can construct "Rules" from loan types or other data if available, 
-  // or keeps using some static data if "Rules" aren't in reference-data yet.
-  // For now, let's assume 'rules' might be in bank_data or we just show schemes + loan types acting as rules.
-
-  const loanTypes = referenceData?.bank_data?.loan_types || []
-
-  // Filter Logic
-  const filteredSchemes = schemes.filter((s: any) =>
-    (s.scheme_name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (s.description ?? "").toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const filteredLoanTypes = loanTypes.filter((l: any) =>
-    (l.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (l.id ?? "").toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const getCategoryIcon = (category: string) => {
-    switch ((category ?? "").toLowerCase()) {
-      case "business": return <Building2 className="w-4 h-4" />
-      case "housing": return <FileText className="w-4 h-4" />
-      case "agriculture": return <Users className="w-4 h-4" />
-      default: return <BookOpen className="w-4 h-4" />
-    }
-  }
-
   return (
-    <div className="space-y-6 animate-in fade-in">
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input
-          placeholder="Search schemes, loan types, or eligibility rules..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
+    <div className="text-center p-12 border rounded-lg bg-muted/20 border-dashed animate-in fade-in zoom-in-95 duration-500">
+      <div className="flex justify-center mb-4">
+        <Building2 className="w-12 h-12 text-muted-foreground/50" />
       </div>
-
-      <Tabs defaultValue="schemes" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="schemes">Government Schemes</TabsTrigger>
-          <TabsTrigger value="rules">Loan Categories & Rules</TabsTrigger>
-        </TabsList>
-
-        {/* 1. Government Schemes Tab */}
-        <TabsContent value="schemes" className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            {filteredSchemes.length > 0 ? filteredSchemes.map((scheme: any, idx: number) => (
-              <Card
-                key={idx}
-                className="cursor-pointer hover:shadow-md transition-shadow hover:border-primary/50"
-                onClick={() => setSelectedItem({ ...scheme, type: 'scheme' })}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <FileText className="w-4 h-4 text-primary" />
-                      <CardTitle className="text-lg">{scheme.scheme_name}</CardTitle>
-                    </div>
-                    <Badge variant="outline">{scheme.category}</Badge>
-                  </div>
-                  <CardDescription className="text-sm line-clamp-2">{scheme.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Max: {scheme.max_amount}</span>
-                    <Button variant="ghost" size="sm" className="h-6">Details <ExternalLink className="w-3 h-3 ml-1" /></Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )) : (
-              <div className="text-center p-8 text-muted-foreground col-span-2">No schemes found matching your search.</div>
-            )}
-          </div>
-        </TabsContent>
-
-        {/* 2. Rules / Loan Types Tab */}
-        <TabsContent value="rules" className="space-y-4">
-          <div className="grid gap-4">
-            {filteredLoanTypes.length > 0 ? filteredLoanTypes.map((loan: any, idx: number) => (
-              <Card
-                key={idx}
-                className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => setSelectedItem({ ...loan, type: 'loan' })}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Shield className="w-4 h-4 text-primary" />
-                      <CardTitle className="text-lg">{loan.name}</CardTitle>
-                    </div>
-                    <Badge variant="outline" className="uppercase">{loan.id.replace('_', ' ')}</Badge>
-                  </div>
-                  <CardDescription className="text-sm">{loan.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm text-muted-foreground">
-                    Requires: {loan.documents_required?.slice(0, 3).join(", ")}...
-                  </div>
-                </CardContent>
-              </Card>
-            )) : (
-              <div className="text-center p-8 text-muted-foreground">No loan rules found.</div>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* Detail Modal */}
-      {selectedItem?.type === 'scheme' && (
-        <SchemeModal
-          scheme={selectedItem}
-          isOpen={!!selectedItem}
-          onOpenChange={(open) => !open && setSelectedItem(null)}
-        />
-      )}
-
-      {selectedItem?.type !== 'scheme' && selectedItem && (
-        <LoanTypeModal
-          loan={selectedItem}
-          isOpen={!!selectedItem}
-          onOpenChange={(open) => !open && setSelectedItem(null)}
-        />
-      )}
+      <h3 className="text-xl font-semibold text-foreground mb-2">Schemes are Contextual</h3>
+      <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
+        Government schemes and eligibility rules are matched specifically to your profile.
+        <br /><br />
+        Please <strong>submit a loan application</strong> to view personalized scheme recommendations and eligibility gaps.
+      </p>
     </div>
   )
 }

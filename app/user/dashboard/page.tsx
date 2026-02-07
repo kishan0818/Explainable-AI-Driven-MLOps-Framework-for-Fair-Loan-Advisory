@@ -22,7 +22,7 @@ export default function UserDashboard() {
   const [selectedApp, setSelectedApp] = useState<any | null>(null)
   const [referenceData, setReferenceData] = useState<any>(null)
   const [tempApp, setTempApp] = useState<any | null>(null) // State for immediate result after creation
-  const [stats, setStats] = useState({ total: 0, approved: 0, rejected: 0 })
+  const [stats, setStats] = useState({ total: 0, eligible: 0, review: 0 })
 
   const fetchDashboardData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -61,11 +61,11 @@ export default function UserDashboard() {
         const finalStatus = app.status || 'processed'
 
         // Display Logic only (Visual mapping, not data changing)
-        let displayStatus = 'Needs Review'
-        if (finalStatus === 'approve') displayStatus = 'Approved'
-        if (finalStatus === 'reject') displayStatus = 'Rejected'
+        let displayStatus = 'Analysis Complete'
+        if (finalStatus === 'approve') displayStatus = 'Eligible for Review'
+        if (finalStatus === 'reject') displayStatus = 'Needs Profile Improvement'
         // If technical reject but low risk (rare), keep rejected. 
-        // If unknown status, 'Needs Review' is safe default for UI badge.
+        // If unknown status, 'Analysis Complete' is safe default for UI badge.
 
         return {
           id: app.id,
@@ -75,28 +75,31 @@ export default function UserDashboard() {
           status: finalStatus, // Internal status
           displayStatus: displayStatus, // UI Badge Text only
           submittedDate: new Date(app.created_at).toLocaleDateString(),
+          schemeCount: app.scheme_recommendations?.length || 0,
 
           // Full Data for Detail View (Modal)
+          // STRICT MAPPING: Must match AnalysisResult interface bit-for-bit
           fullData: {
-            application_id: app.id,
-            loan_type: app.loan_type,
-            prediction: app.status, // APPROVE / REJECT FROM DB
-            // STRICT: Use DB field name exactly, no renaming
-            ml_probability: analysis?.ml_probability ?? null,
-            risk_band: analysis?.risk_band,
-            risk_score: analysis?.risk_score,
-            // Preserve structured XAI data for Phase 2 UI
-            negative_factors: (analysis?.negative_factors ?? []).map((f: any) =>
+            applicationId: app.id,
+            loanType: app.loan_type,
+            prediction: app.status,
+            ml_probability: analysis?.ml_probability,
+            riskBand: analysis?.risk_band,
+            riskScore: analysis?.risk_score,
+
+            // Structured Factors
+            riskFactors: (analysis?.negative_factors ?? []).map((f: any) =>
               typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'negative' } : f
             ),
-            positive_factors: (analysis?.positive_factors ?? []).map((f: any) =>
+            positiveFactors: (analysis?.positive_factors ?? []).map((f: any) =>
               typeof f === 'string' ? { factor: f, feature: 'unknown', impact: 'medium', direction: 'positive' } : f
             ),
-            decision_summary: analysis?.decision_summary,
+            decisionSummary: analysis?.decision_summary,
 
-            // Pass persisted sub-tables directly
-            bank_suitability: app.bank_suitability ?? [],
-            scheme_recommendations: app.scheme_recommendations ?? [],
+            // Sub-tables
+            banks: app.bank_suitability ?? [],
+            schemes: app.scheme_recommendations ?? [],
+            improvementRecommendations: app.improvement_recommendations ?? []
           }
         }
       }) || []
@@ -106,12 +109,12 @@ export default function UserDashboard() {
       // Stats
       setStats({
         total: formattedApps.length,
-        approved: formattedApps.filter(a => a.displayStatus === 'Approved').length,
-        rejected: formattedApps.filter(a => a.displayStatus !== 'Approved').length
+        eligible: formattedApps.filter(a => a.status === 'approve').length,
+        review: formattedApps.filter(a => a.status !== 'approve').length
       })
 
     } catch (e: any) {
-      console.error("Error fetching dashboard data", e)
+      // console.error("Error fetching dashboard data", e) // Clean logs
     } finally {
       setIsLoading(false)
     }
@@ -137,16 +140,23 @@ export default function UserDashboard() {
     setView('detail')
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, riskBand?: string) => {
+    // Use Risk Band if available, else Status
+    if (riskBand) {
+      const band = riskBand.toLowerCase()
+      if (band === 'low') return <Badge className="bg-success hover:bg-success/90 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Low Risk</Badge>
+      if (band === 'medium') return <Badge className="bg-warning hover:bg-warning/90 text-black gap-1"><AlertTriangle className="w-3 h-3" /> Medium Risk</Badge>
+      if (band === 'high') return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" /> High Risk</Badge>
+    }
+
+    // Fallback if no risk band (should not happen in Phase 2)
     switch (status) {
-      case 'Approved':
-        return <Badge className="bg-success hover:bg-success/90 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Approved</Badge>
-      case 'Rejected':
-        return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> Rejected</Badge>
-      case 'Needs Review':
-        return <Badge className="bg-warning hover:bg-warning/90 text-black gap-1"><AlertTriangle className="w-3 h-3" /> Needs Review</Badge>
+      case 'approve':
+        return <Badge className="bg-success hover:bg-success/90 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Eligible for Review</Badge>
+      case 'reject':
+        return <Badge variant="outline" className="text-muted-foreground gap-1"><AlertTriangle className="w-3 h-3" /> Needs Profile Improvement</Badge>
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return <Badge variant="secondary">Analysis Complete</Badge>
     }
   }
 
@@ -180,14 +190,11 @@ export default function UserDashboard() {
               <h1 className="text-3xl font-bold capitalize">{selectedApp.type} Application</h1>
               <p className="text-muted-foreground">ID: {selectedApp.displayId} • Submitted on {selectedApp.submittedDate}</p>
             </div>
-            {getStatusBadge(selectedApp.displayStatus)}
+            {getStatusBadge(selectedApp.status, selectedApp.fullData.risk_band)}
           </div>
 
           <ModelPrediction
-            initialResult={{
-              ...selectedApp.fullData,
-              application_id: selectedApp.id
-            }}
+            initialResult={selectedApp.fullData}
             mode="view"
             referenceData={referenceData}
           />
@@ -233,16 +240,16 @@ export default function UserDashboard() {
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">TOTAL</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">TOTAL APPLICATIONS</CardTitle></CardHeader>
                 <CardContent><div className="text-3xl font-bold">{stats.total}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-success shadow-sm">
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-success">APPROVED</CardTitle></CardHeader>
-                <CardContent><div className="text-3xl font-bold">{stats.approved}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-success">ELIGIBLE FOR REVIEW</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-bold">{stats.eligible}</div></CardContent>
               </Card>
-              <Card className="border-l-4 border-l-destructive shadow-sm">
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-destructive">REJECTED / REVIEW</CardTitle></CardHeader>
-                <CardContent><div className="text-3xl font-bold">{stats.rejected}</div></CardContent>
+              <Card className="border-l-4 border-l-warning shadow-sm">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-warning-foreground">NEEDS IMPROVEMENT</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-bold">{stats.review}</div></CardContent>
               </Card>
             </div>
 
@@ -274,6 +281,12 @@ export default function UserDashboard() {
                         <div className="font-semibold text-lg text-foreground/80 min-w-[100px]">
                           {app.amount}
                         </div>
+                        {/* Scheme Indicator */}
+                        {app.schemeCount > 0 && (
+                          <Badge variant="outline" className="ml-4 bg-primary/5 text-primary border-primary/20 gap-1 hidden md:inline-flex">
+                            <Building2 className="w-3 h-3" /> {app.schemeCount} Schemes
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Right Side: Status and Action */}
