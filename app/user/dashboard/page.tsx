@@ -74,11 +74,12 @@ export default function UserDashboard() {
 
         const finalStatus = app.status || 'processed'
 
-        // Display Logic only (Visual mapping, not data changing)
-        let displayStatus = 'Analysis Complete'
-        if (finalStatus === 'approve') displayStatus = 'Eligible for Review'
-        if (finalStatus === 'reject') displayStatus = 'Needs Profile Improvement'
-        // If technical reject but low risk (rare), keep rejected. 
+        // Display Logic (Visual mapping)
+        let displayStatus = 'Needs Improvement' // Default fallback
+        // Check "Good" conditions: Approved OR Low Risk OR High Score
+        if (finalStatus === 'approve' || (analysis?.risk_score !== undefined && analysis.risk_score <= 40)) {
+          displayStatus = 'Eligible'
+        }
         // If unknown status, 'Analysis Complete' is safe default for UI badge.
 
         return {
@@ -123,8 +124,8 @@ export default function UserDashboard() {
       // Stats
       setStats({
         total: formattedApps.length,
-        eligible: formattedApps.filter(a => a.status === 'approve').length,
-        review: formattedApps.filter(a => a.status !== 'approve').length
+        eligible: formattedApps.filter(a => a.status === 'approve' || (a.fullData.riskScore !== undefined && a.fullData.riskScore !== null && a.fullData.riskScore <= 40)).length,
+        review: formattedApps.filter(a => a.status !== 'approve' && (a.fullData.riskScore === undefined || a.fullData.riskScore === null || a.fullData.riskScore > 40)).length
       })
 
     } catch (e: any) {
@@ -155,23 +156,24 @@ export default function UserDashboard() {
   }
 
   const getStatusBadge = (status: string, riskBand?: string) => {
-    // Use Risk Band if available, else Status
-    if (riskBand) {
-      const band = riskBand.toLowerCase()
-      if (band === 'low') return <Badge className="bg-success hover:bg-success/90 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Low Risk</Badge>
-      if (band === 'medium') return <Badge className="bg-warning hover:bg-warning/90 text-black gap-1"><AlertTriangle className="w-3 h-3" /> Medium Risk</Badge>
-      if (band === 'high') return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" /> High Risk</Badge>
+    // Priority: Check specific status strings first
+    if (status === 'Eligible' || status === 'approve') {
+      return <Badge className="bg-success hover:bg-success/90 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Eligible</Badge>
     }
 
-    // Fallback if no risk band (should not happen in Phase 2)
-    switch (status) {
-      case 'approve':
-        return <Badge className="bg-success hover:bg-success/90 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Eligible for Review</Badge>
-      case 'reject':
-        return <Badge variant="outline" className="text-muted-foreground gap-1"><AlertTriangle className="w-3 h-3" /> Needs Profile Improvement</Badge>
-      default:
-        return <Badge variant="secondary">Analysis Complete</Badge>
+    // Needs Improvement (Orange)
+    if (status.includes('Improvement') || status === 'reject') {
+      return <Badge className="bg-warning hover:bg-warning/90 text-black gap-1"><AlertTriangle className="w-3 h-3" /> Needs Improvement</Badge>
     }
+
+    // Fallback based on risk band if status is generic
+    if (riskBand) {
+      const band = riskBand.toLowerCase()
+      if (band === 'low') return <Badge className="bg-success hover:bg-success/90 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Eligible</Badge>
+      if (band === 'medium' || band === 'high') return <Badge className="bg-warning hover:bg-warning/90 text-black gap-1"><AlertTriangle className="w-3 h-3" /> Needs Improvement</Badge>
+    }
+
+    return <Badge variant="secondary">{status}</Badge>
   }
 
   // Immediate Result View (Full Page as mostly distinct flow)
@@ -179,7 +181,7 @@ export default function UserDashboard() {
     return (
       <div className="min-h-screen bg-background">
         <Navbar title="Application Review" userRole="Applicant" />
-        <div className="container mx-auto p-6 max-w-5xl space-y-6">
+        <div className="w-full px-4 md:px-6 space-y-6">
           <Button variant="ghost" onClick={handleBack} className="mb-4 pl-0 hover:bg-transparent">
             <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard
           </Button>
@@ -195,7 +197,7 @@ export default function UserDashboard() {
     return (
       <div className="min-h-screen bg-background">
         <Navbar title="Application Details" userRole="Applicant" />
-        <div className="container mx-auto p-6 max-w-5xl space-y-6 animate-in fade-in">
+        <div className="w-full px-4 md:px-6 space-y-6 animate-in fade-in">
           <div className="flex items-center justify-between mb-6">
             <div>
               <Button variant="ghost" onClick={handleBack} className="mb-2 pl-0 hover:bg-transparent">
@@ -221,7 +223,7 @@ export default function UserDashboard() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar title="My Dashboard" userRole="Applicant" />
-      <div className="container mx-auto p-6 max-w-6xl space-y-8 animate-in fade-in">
+      <div className="w-full px-4 md:px-6 space-y-8 animate-in fade-in">
 
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -260,7 +262,7 @@ export default function UserDashboard() {
                 <CardContent><div className="text-3xl font-bold">{stats.total}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-success shadow-sm">
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-success">ELIGIBLE FOR REVIEW</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-success">ELIGIBLE</CardTitle></CardHeader>
                 <CardContent><div className="text-3xl font-bold">{stats.eligible}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-warning shadow-sm">

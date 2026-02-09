@@ -141,7 +141,7 @@ export function ModelPrediction({
     )
   }
 
-  const isApproved = prediction.riskBand === 'low' || prediction.prediction === 'approve'
+  const isApproved = prediction.riskBand === 'low' || prediction.prediction === 'approve' || (prediction.riskScore !== undefined && prediction.riskScore !== null && prediction.riskScore <= 40)
 
   // ---------------------------------------------------------
   // MAIN RENDER (Strict Data Only)
@@ -158,7 +158,7 @@ export function ModelPrediction({
               <h2 className="text-2xl font-bold">Risk Assessment</h2>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-muted-foreground font-medium">
-                  Score: {prediction.riskScore !== undefined && prediction.riskScore !== null ? prediction.riskScore : "NA"}/100
+                  Approval Chance: <span className="text-primary font-bold">{prediction.riskScore !== undefined && prediction.riskScore !== null ? 100 - prediction.riskScore : "NA"}%</span>
                 </span>
                 {prediction.riskBand ? (
                   <Badge variant={prediction.riskBand === 'low' ? 'outline' : prediction.riskBand === 'medium' ? 'secondary' : 'destructive'} className="uppercase">
@@ -172,7 +172,7 @@ export function ModelPrediction({
           <div className="flex flex-col md:flex-row gap-6 mt-4">
             <div className="flex-1">
               <p className="text-foreground text-lg leading-relaxed">
-                {prediction.decisionSummary}
+                {prediction.decisionSummary?.replace(/Risk Score: \d+ \([A-Z]+\)\.\s*/, '')}
               </p>
             </div>
             <div className="min-w-[250px]">

@@ -697,7 +697,7 @@ def build_explanation(risk_score, risk_band, rules_res, schemes_res, improvement
     failed_soft = [r for r in real_negative_rules if r['severity'] == 'soft']
     
     # 2. Build Decision Summary (Advisory Language)
-    summary = f"Risk Score: {int(risk_score)} ({risk_band.upper()}). "
+    summary = ""
     
     violation_count = len(failed_hard) + len(failed_soft)
     
