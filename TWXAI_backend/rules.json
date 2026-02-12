@@ -117,7 +117,7 @@
     {
       "id": "weaker_sections_transgenders",
       "category": "psl_compliance",
-      "description": "RBI PSL Weaker Sections - Transgenders inclusion (Para 17.1.xii)",
+      "description": "RBI PSL Weaker Sections - Special Category Inclusion Scheme (Para 17.1.xii)",
       "severity": "soft",
       "loan_types": [
         "all"
@@ -137,14 +137,14 @@
         },
         {
           "type": "flag_for_manual_review",
-          "reason": "Transgender borrower - automatic weaker section classification"
+          "reason": "Special category borrower - automatic priority classification"
         }
       ]
     },
     {
       "id": "weaker_sections_sc_st",
       "category": "psl_compliance",
-      "description": "RBI PSL Weaker Sections - Scheduled Castes and Scheduled Tribes (Para 17.1.iv)",
+      "description": "RBI PSL Weaker Sections - Social Inclusion Benefit (Para 17.1.iv)",
       "severity": "soft",
       "loan_types": [
         "all"
@@ -167,7 +167,7 @@
         },
         {
           "type": "flag_for_manual_review",
-          "reason": "SC/ST borrower - automatic weaker section classification"
+          "reason": "Social inclusion category - automatic priority classification"
         }
       ]
     },
