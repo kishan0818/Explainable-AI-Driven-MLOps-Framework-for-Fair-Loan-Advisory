@@ -9,3 +9,8 @@ rule_engine_op.log
 
 
 train_synth_gpu.py
+
+Dockerfile
+.env
+.env.example
+.gitignore

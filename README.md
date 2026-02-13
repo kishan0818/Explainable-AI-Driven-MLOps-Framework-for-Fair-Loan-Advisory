@@ -7,12 +7,14 @@ TWXAI is a comprehensive loan prediction system that combines **Explainable AI (
 ## 🎯 Features
 
 ### 🤖 AI/ML Components
+
 - **Random Forest + SMOTE Model** for loan default prediction
 - **SHAP (SHapley Additive exPlanations)** for model interpretability
 - **Feature importance analysis** and risk factor identification
 - **Confidence scoring** for predictions
 
 ### 🏛️ Regulatory Compliance
+
 - **RBI/PSL compliance** rules engine
 - **KYC verification** checks
 - **Credit scoring** algorithms
@@ -20,6 +22,7 @@ TWXAI is a comprehensive loan prediction system that combines **Explainable AI (
 - **Constitutional compliance** for inclusive lending
 
 ### 🏛️ Government Schemes Integration
+
 - **20+ Government Schemes** including:
   - MUDRA loans for micro-enterprises
   - PMAY for housing loans
@@ -28,6 +31,7 @@ TWXAI is a comprehensive loan prediction system that combines **Explainable AI (
   - And many more...
 
 ### 💻 User Interface
+
 - **Modern Next.js Frontend** with responsive design
 - **Real-time predictions** with explanations
 - **Admin dashboard** for monitoring
@@ -53,6 +57,7 @@ TWXAI is a comprehensive loan prediction system that combines **Explainable AI (
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - **Node.js 18+**
 - **Python 3.10+**
 - **Git**
@@ -60,12 +65,14 @@ TWXAI is a comprehensive loan prediction system that combines **Explainable AI (
 ### Installation
 
 1. **Clone the repository:**
+
 ```bash
 git clone <repository-url>
 cd TWXAI-Complete-Project
 ```
 
-2. **Setup Backend:**
+1. **Setup Backend:**
+
 ```bash
 cd TWXAI_backend
 python -m venv venv
@@ -74,13 +81,15 @@ pip install -r requirements.txt
 pip install fastapi uvicorn requests
 ```
 
-3. **Setup Frontend:**
+1. **Setup Frontend:**
+
 ```bash
 cd ..  # Back to main directory
 npm install
 ```
 
-4. **Start the Complete System:**
+1. **Start the Complete System:**
+
 ```bash
 # Option 1: Automated startup (Windows)
 start_integrated_system.bat
@@ -101,6 +110,7 @@ npm run dev
 ## 🔧 Testing
 
 ### Test Backend
+
 ```bash
 cd TWXAI_backend
 .\venv\Scripts\Activate.ps1
@@ -108,11 +118,13 @@ python test_backend.py
 ```
 
 ### Test Frontend
+
 ```bash
 python test_frontend_simple.py
 ```
 
 ### Test Complete Integration
+
 ```bash
 python test_integration.py
 ```
@@ -120,6 +132,7 @@ python test_integration.py
 ## 📊 System Components
 
 ### Frontend (Next.js)
+
 - **Loan Application Form** - Complete application interface
 - **Prediction Results** - Real-time results with explanations
 - **SHAP Visualizations** - Interactive feature importance
@@ -128,6 +141,7 @@ python test_integration.py
 - **Responsive Design** - Works on all devices
 
 ### Backend (Python FastAPI)
+
 - **ML Model** - Trained Random Forest + SMOTE
 - **SHAP Integration** - Explainable AI explanations
 - **Rules Engine** - Regulatory compliance checking
@@ -154,11 +168,13 @@ python test_integration.py
 ## 📝 API Documentation
 
 ### Backend Endpoints (Port 8000)
+
 - `GET /health` - System health check
 - `GET /model/status` - Model performance metrics
 - `POST /predict` - Loan prediction with explanations
 
 ### Frontend Pages (Port 3000)
+
 - `/` - Main loan application interface
 - `/user/dashboard` - User dashboard
 - `/admin/dashboard` - Admin monitoring
@@ -169,6 +185,7 @@ python test_integration.py
 ## 🛠️ Development
 
 ### Project Structure
+
 ```
 TWXAI-Complete-Project/
 ├── TWXAI_backend/           # Python FastAPI Backend
@@ -190,6 +207,7 @@ TWXAI-Complete-Project/
 ```
 
 ### Adding New Features
+
 1. **Backend changes** - Modify files in `TWXAI_backend/`
 2. **Frontend changes** - Modify files in `app/` and `components/`
 3. **Test changes** - Update test scripts
@@ -197,26 +215,36 @@ TWXAI-Complete-Project/
 
 ## 🚀 Deployment
 
-### Local Development
-- Backend: http://localhost:8000
-- Frontend: http://localhost:3000
-- API Docs: http://localhost:8000/docs
+The project is now fully containerized and ready for deployment using Docker.
 
-### Production Deployment
-- Deploy backend to cloud service (AWS, GCP, Azure)
-- Deploy frontend to Vercel, Netlify, or similar
-- Configure environment variables
-- Set up monitoring and logging
+### Quick Start with Docker
+
+```bash
+# 1. Apps need environment variables
+cp .env.example .env
+
+# 2. Build and Run
+docker-compose up --build
+```
+
+- **Frontend**: <http://localhost:3000>
+- **Backend**: <http://localhost:8000>
+
+### Detailed Guide
+
+For detailed instructions on deploying to cloud providers (AWS, Render, Vercel) and troubleshooting, please refer to [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## 📞 Support
 
 ### Troubleshooting
+
 1. **Check logs** in terminal windows
 2. **Run test scripts** to identify issues
 3. **Verify dependencies** are installed
 4. **Ensure ports** 3000 and 8000 are available
 
 ### Common Issues
+
 - **Port conflicts** - Kill processes using ports 3000/8000
 - **Dependencies** - Run `npm install` and `pip install -r requirements.txt`
 - **Model loading** - Check if model files exist in backend directory
@@ -225,6 +253,7 @@ TWXAI-Complete-Project/
 ## 🎉 Success Indicators
 
 The system is working correctly when:
+
 - ✅ Backend shows "Model loaded successfully!"
 - ✅ Frontend loads without errors
 - ✅ API calls return prediction results

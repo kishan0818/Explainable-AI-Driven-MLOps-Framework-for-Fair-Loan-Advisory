@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Building2, Shield, TrendingUp, Loader2, AlertCircle } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import ReCAPTCHA from "react-google-recaptcha"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -19,6 +20,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null)
 
   const router = useRouter()
   // const supabase = createClient() - Removed, using imported singleton
@@ -31,7 +34,12 @@ export default function LoginPage() {
 
     try {
       if (isSignUp) {
-        // Sign Up Logic
+        // Sign Up Logic (Supabase Direct + Captcha Check IF needed or fallback)
+        // For Phase 10: Requirement says "User Login" and "Admin Login".
+        // Use standard signup for now (without captcha strictness on backend or add it).
+        // Let's keep SignUp direct for now to verify Login flow first or add Captcha check here too?
+        // Requirement: "Implement Google reCAPTCHA v2 ... on: User Login".
+
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -41,7 +49,6 @@ export default function LoginPage() {
         })
         if (signUpError) throw signUpError
 
-        // Sync user to public.users table (Best effort for signup, auth trigger preferred usually but client-side requested)
         if (data.user) {
           await supabase.from('users').upsert({
             id: data.user.id,
@@ -52,26 +59,38 @@ export default function LoginPage() {
         setSuccessMessage("Sign up successful! Please check your email for the verification link.")
         setIsSignUp(false)
       } else {
-        // Sign In Logic
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-        if (signInError) throw signInError
-
-        // Sync user to public.users table on login (Ensure record exists)
-        if (data.user) {
-          const { error: syncError } = await supabase.from('users').upsert({
-            id: data.user.id,
-            email: email
-          }, { onConflict: 'id' })
-
-          if (syncError) {
-            console.error("Failed to sync user profile:", syncError)
-            // Proceed anyway as auth is successful
-          }
+        // Sign In Logic (VIA BACKEND PROXY for reCAPTCHA)
+        if (!recaptchaToken) {
+          setError("Please complete the reCAPTCHA verification.")
+          setLoading(false)
+          return
         }
 
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, recaptcha_token: recaptchaToken })
+        })
+
+        if (!res.ok) {
+          const errData = await res.json()
+          throw new Error(errData.detail || "Login failed")
+        }
+
+        const data = await res.json()
+
+        // Sync Session to Supabase Client (so RLS works)
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || "" // Backend now returns this
+        })
+
+        if (sessionError) {
+          console.error("Session Sync Error:", sessionError)
+          // fallback?
+        }
+
+        // Router Push
         router.push("/user/dashboard")
         router.refresh()
       }
@@ -79,6 +98,7 @@ export default function LoginPage() {
       setError(err.message || "An error occurred during authentication")
     } finally {
       setLoading(false)
+      // Reset Captcha if needed?
     }
   }
 
@@ -176,7 +196,16 @@ export default function LoginPage() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading || !email || !password}>
+              {!isSignUp && (
+                <div className="flex justify-center py-2">
+                  <ReCAPTCHA
+                    sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"} // Test Key default
+                    onChange={(token) => setRecaptchaToken(token)}
+                  />
+                </div>
+              )}
+
+              <Button type="submit" className="w-full" disabled={loading || !email || !password || (!isSignUp && !recaptchaToken)}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
