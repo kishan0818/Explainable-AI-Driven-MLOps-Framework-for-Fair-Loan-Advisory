@@ -1,0 +1,2 @@
+id,event_type,model_version,details,severity,created_at
+a436fc1f-bcc6-4d6c-a758-100c6648d92e,system_info,1.0.0,{'message': 'MLOps system initialized. Standard Model v1.0.0 set as Primary.'},info,2026-02-13T14:27:25.405663+00:00

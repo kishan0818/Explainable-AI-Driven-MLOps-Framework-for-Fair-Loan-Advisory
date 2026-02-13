@@ -60,39 +60,39 @@ bank_loan_data = {}
 bank_profiles = [] # Loaded from DB or Fallback
 
 # --- LifeCycle & Loading ---
+# --- LifeCycle & Loading ---
+# Global Controller Reference
+ml_controller = None
+
 def load_ml_components():
     global model, feature_selector, label_encoders, pca, rules_data, schemes_data, bank_loan_data, bank_profiles
-    global xgb_model, xgb_scaler, xgb_encoders
+    global ml_controller 
+    
     try:
-        # 1. Load ML Artifacts (RF - Baseline)
+        # 1. Load RF Baseline (Legacy/Fallback)
         base_dir_rf = os.path.join("results_rf_smote_controlled_pca1_wocs", "models")
         if not os.path.exists(base_dir_rf): base_dir_rf = "models"
 
         try:
             model = joblib.load(os.path.join(base_dir_rf, "rf_smote_model.joblib"))
-            # feature_selector = joblib.load(os.path.join(base_dir_rf, "feature_selector.joblib")) # RF specific
-            label_encoders = joblib.load(os.path.join(base_dir_rf, "label_encoders.joblib")) # RF specific
-            # if os.path.exists(os.path.join(base_dir_rf, "pca.joblib")):
-            #     pca = joblib.load(os.path.join(base_dir_rf, "pca.joblib"))
+            label_encoders = joblib.load(os.path.join(base_dir_rf, "label_encoders.joblib")) 
         except Exception as e:
             logger.error(f"Failed to load RF Baseline: {e}")
 
-        # 1.1 Load XGBoost Artifacts (Production)
-        base_dir_xgb = os.path.join("results_rf_smote_controlled_pca1_wocs", "models") # Same dir for now
-        
+        # 1.1 Initialize MLOps Controller (Handles XGBoost)
+        from mlops_pipeline import DualModelController
         try:
-            xgb_model = xgb.XGBClassifier()
-            xgb_model.load_model(os.path.join(base_dir_xgb, "xgboost_smote.json"))
-            xgb_scaler = joblib.load(os.path.join(base_dir_xgb, "xgboost_scaler.joblib"))
-            xgb_encoders = joblib.load(os.path.join(base_dir_xgb, "xgboost_encoders.joblib"))
-            logger.info("✅ XGBoost Model Loaded (Global)")
+            ml_controller = DualModelController()
+            logger.info("✅ MLOps Controller Initialized")
         except Exception as e:
-            logger.error(f"Failed to load XGBoost: {e}")
-            xgb_model = None
+            logger.error(f"Failed to initialize MLOps Controller: {e}")
             
         # 2. Load JSON Helpers
-        with open("rules.json", 'r') as f: rules_data = json.load(f)
-        with open("schemes.json", 'r') as f: schemes_data = json.load(f)
+        try:
+            with open("rules.json", 'r') as f: rules_data = json.load(f)
+            with open("schemes.json", 'r') as f: schemes_data = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load JSON helpers: {e}")
             
         # 3. Load Bank Profiles (STRICT: DB ONLY)
         try:
@@ -920,17 +920,35 @@ async def analyze_application(app_in: LoanApplication, user_payload: dict = Depe
                             except: df_xgb[col] = 0
                             
                 # Scale
+                # Scale
+                model_input = None
                 if xgb_scaler:
                     arr_xgb = xgb_scaler.transform(df_xgb)
-                    # Create DMatrix? Or just pass array if model is sklearn wrapper or booster.
-                    # We saved `xgb.XGBClassifier`. It accepts numpy.
-                    probs_xgb = xgb_model.predict_proba(arr_xgb)[0]
+                    model_input = arr_xgb
                 else:
-                    # Fallback if no scaler (unlikely)
-                    probs_xgb = xgb_model.predict_proba(df_xgb.values)[0]
+                    model_input = df_xgb.values
                     
-                ml_prob = float(probs_xgb[1])
-                logger.info(f"XGBoost Prediction: {ml_prob:.4f}")
+                # --- MLOps Pipeline Execution ---
+                if ml_controller:
+                    # Pass context for Fairness Monitoring (Age, Gender, etc.)
+                    # We use the raw input_data dict which has 'Age', 'Gender' etc keys
+                    pred_result = ml_controller.predict(
+                        model_input=model_input, 
+                        raw_input=df_xgb, 
+                        context=input_data
+                    )
+                    
+                    ml_prob = pred_result.get("probability", 0.5)
+                    version = pred_result.get("model_version", "unknown")
+                    logger.info(f"MLOps Prediction ({version}): {ml_prob:.4f}")
+                    
+                    if pred_result.get("error"):
+                        logger.error(f"MLOps Error: {pred_result.get('error')}")
+                else:
+                    # Fallback if controller failed to init (Should not happen if setup valid)
+                    probs_xgb = xgb_model.predict_proba(model_input)[0]
+                    ml_prob = float(probs_xgb[1])
+                    logger.info(f"XGBoost Prediction (Direct): {ml_prob:.4f}")
                 
             except Exception as e:
                 logger.error(f"XGBoost Prediction Error: {e}")
