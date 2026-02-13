@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "version": "0.0.1",
+    "version": "1.0",
     "description": "Knowledge base of Indian Government financial inclusion schemes for loan applicants",
-    "last_updated": "2026-02-13",
+    "last_updated": "2025-09-25",
     "sources": [
       "https://www.standupmitra.in/Home/SchemeGuidelines",
       "https://nulm.gov.in/PDF/NULM_Mission/NULM_mission_document.pdf",
@@ -50,15 +50,7 @@
         "Bank account details"
       ],
       "subsidy_or_interest": "Interest rate at EBLR+3.25% with credit guarantee covering 80% of loan amount, reducing collateral burden",
-      "validity": "Extended up to 2025",
-      "content_hash": "8fd3a7d717fb6a4cd5cb0e2aede8a125a48a0bec8df0b8991c9757a45ad4ee8e",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": true,
-        "interest_rate_mentioned": true
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Extended up to 2025"
     },
     {
       "id": "day_nulm",
@@ -86,15 +78,7 @@
         "Bank account details"
       ],
       "subsidy_or_interest": "Interest subsidy above 7% rate for enterprises, additional 3% subvention for women SHGs on timely repayment",
-      "validity": "Ongoing central government mission",
-      "content_hash": "e67bc214da991adf0ae178acecab511f89a2da3f88273998db0b7d276ea8c73b",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": true,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Ongoing central government mission"
     },
     {
       "id": "pmay_urban",
@@ -122,15 +106,7 @@
         "Affidavit for not owning house"
       ],
       "subsidy_or_interest": "Central assistance amount varies by category, CLSS provides interest subsidy on home loans for eligible income groups",
-      "validity": "PMAY-U 2.0 implementation period extended, registration deadline till December 2025",
-      "content_hash": "02ab6bdc409b842abd7d8e07691f705a395e54440583002d5b28c44e3521ad3b",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": true,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "PMAY-U 2.0 implementation period extended, registration deadline till December 2025"
     },
     {
       "id": "clss",
@@ -158,15 +134,7 @@
         "Affidavit for house ownership"
       ],
       "subsidy_or_interest": "Interest subsidy ranges from 3% to 6.5% depending on income category, calculated on NPV basis for maximum 20 years or actual loan tenure, whichever is lower",
-      "validity": "Part of PMAY-U mission, extended till 2025",
-      "content_hash": "92655b5ff8fc78c5a050f7110d39eb88ff3e08556192aba20f144de64843536c",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": false,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Part of PMAY-U mission, extended till 2025"
     },
     {
       "id": "pm_vidyalaxmi",
@@ -194,15 +162,7 @@
         "Cost estimate from institution"
       ],
       "subsidy_or_interest": "Interest subvention available for economically weaker sections, moratorium period with simple interest",
-      "validity": "Ongoing scheme",
-      "content_hash": "532b56075a595a5e480e08281c4aea8883f284ba3c966b5772298690f2d3f6b7",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": false,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Ongoing scheme"
     },
     {
       "id": "kisan_credit_card",
@@ -230,15 +190,7 @@
         "Security post-dated cheques"
       ],
       "subsidy_or_interest": "Interest subvention of 3% per annum subject to timely repayment, making effective interest rate 4% per annum",
-      "validity": "Ongoing scheme with periodic renewals",
-      "content_hash": "af976c2b993739e91d30293af57f888c8678edb3f7dff6e5f1cab48438072429",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": false,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Ongoing scheme with periodic renewals"
     },
     {
       "id": "pm_fasal_bima",
@@ -266,15 +218,7 @@
         "Claim form and supporting documents for claims"
       ],
       "subsidy_or_interest": "Government provides subsidy on premium, farmers pay only 2% for Kharif and 1.5% for Rabi crops, balance borne by Centre and State",
-      "validity": "Ongoing scheme with annual implementation",
-      "content_hash": "40963fb87715b8ff030874c05f05f5269f10bef3c3cc6d6a065d9ad87a6a8ee2",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": false,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Ongoing scheme with annual implementation"
     },
     {
       "id": "pmmy",
@@ -302,9 +246,7 @@
         "Project report for higher loan amounts"
       ],
       "subsidy_or_interest": "Interest rates decided by lending institutions, typically EBLR+3.25% (effective 12.15%), no processing fee for Shishu category",
-      "validity": "Ongoing scheme, Tarun Plus category introduced in 2025",
-      "last_verified_status": "FAILED",
-      "last_verified_notes": "Could not recover URL"
+      "validity": "Ongoing scheme, Tarun Plus category introduced in 2025"
     },
     {
       "id": "cgtmse",
@@ -332,15 +274,7 @@
         "GST registration certificate"
       ],
       "subsidy_or_interest": "Guarantee fee ranges from 0.37% to 0.60% per annum based on loan amount, significantly reduced rates from April 2025",
-      "validity": "Enhanced scheme with increased limit to ₹10 crore from April 2025",
-      "content_hash": "ca3a57a62cd3fad754e5fc82be89734fef8fcaad3b3a24d1e21fddc1219e3568",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": false,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Enhanced scheme with increased limit to ₹10 crore from April 2025"
     },
     {
       "id": "day_nrlm",
@@ -368,9 +302,7 @@
         "Loan utilization certificates"
       ],
       "subsidy_or_interest": "Interest subvention of 3% per annum on prompt repayment, additional 3% for women SHGs, making effective rate 7%",
-      "validity": "Ongoing mission till 2025-26",
-      "last_verified_status": "FAILED",
-      "last_verified_notes": "Could not recover URL"
+      "validity": "Ongoing mission till 2025-26"
     },
     {
       "id": "interest_subvention_shg",
@@ -398,9 +330,7 @@
         "Loan application and utilization plan"
       ],
       "subsidy_or_interest": "Total interest subvention of 6% per annum (3% general + 3% additional for women), making effective interest rate 4% for prompt repayment",
-      "validity": "Ongoing scheme as part of financial inclusion initiatives",
-      "last_verified_status": "FAILED",
-      "last_verified_notes": "Could not recover URL"
+      "validity": "Ongoing scheme as part of financial inclusion initiatives"
     },
     {
       "id": "pmegp",
@@ -428,15 +358,7 @@
         "Bank account details"
       ],
       "subsidy_or_interest": "Margin money subsidy ranges from 25% to 35% of project cost depending on category and location, maximum subsidy ₹5 lakh for service and ₹12.5 lakh for manufacturing",
-      "validity": "15th Finance Commission period till 2025-26",
-      "content_hash": "cbe01d3030c4cf7fa8a42c6ffcce08d9fe13241280ae99e11e611ec2f84d07a2",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": false,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "15th Finance Commission period till 2025-26"
     },
     {
       "id": "pmjdy_rupay_credit",
@@ -464,9 +386,7 @@
         "Address verification documents"
       ],
       "subsidy_or_interest": "Interest rates as per bank's policy, typically 1.5-3% per month on outstanding balance",
-      "validity": "Ongoing under PMJDY mission",
-      "last_verified_status": "FAILED",
-      "last_verified_notes": "Could not recover URL"
+      "validity": "Ongoing under PMJDY mission"
     },
     {
       "id": "mudra_card",
@@ -494,9 +414,7 @@
         "ITR or financial statements"
       ],
       "subsidy_or_interest": "Interest charged on utilized amount as per Mudra loan terms, typically EBLR+3.25%",
-      "validity": "Available for eligible Mudra borrowers",
-      "last_verified_status": "FAILED",
-      "last_verified_notes": "Could not recover URL"
+      "validity": "Available for eligible Mudra borrowers"
     },
     {
       "id": "eclgs",
@@ -524,15 +442,7 @@
         "Loan application form"
       ],
       "subsidy_or_interest": "Interest rate capped at 9.25% for loans up to ₹2 crore and EBLR+3.5% for above ₹2 crore",
-      "validity": "Extended multiple times, currently available with modifications",
-      "content_hash": "344cbe841764dbc62591deb6e4aad91dfcf45143c4c5492b09c3c13fe31aa771",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": true,
-        "interest_rate_mentioned": false
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Extended multiple times, currently available with modifications"
     },
     {
       "id": "rbi_resolution_framework",
@@ -560,15 +470,7 @@
         "Board resolution (for entities)"
       ],
       "subsidy_or_interest": "Interest rates as per original loan terms, conversion of unpaid interest into FITL at same rate",
-      "validity": "Framework implemented with specific timelines, benefits continue as per restructured terms",
-      "content_hash": "648ef20ebfd8033bc777b45c66f44803fa5b574eeba3fe7f777db86f0929ea6a",
-      "last_content_check": {
-        "eligibility_mentioned": false,
-        "documents_mentioned": true,
-        "interest_rate_mentioned": true
-      },
-      "last_verified_status": "VERIFIED",
-      "last_verified_notes": "URL Accessible | Content Updated"
+      "validity": "Framework implemented with specific timelines, benefits continue as per restructured terms"
     }
   ]
 }

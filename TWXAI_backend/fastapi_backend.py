@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import httpx
 import xgboost as xgb
+from regulatory_monitor import RegulatoryMonitor
 
 # Load environment variables
 load_dotenv()
@@ -63,10 +64,14 @@ bank_profiles = [] # Loaded from DB or Fallback
 # --- LifeCycle & Loading ---
 # Global Controller Reference
 ml_controller = None
+regulatory_monitor = None
+regulatory_monitor = None
+regulatory_monitor = None
+regulatory_monitor = None
 
 def load_ml_components():
     global model, feature_selector, label_encoders, pca, rules_data, schemes_data, bank_loan_data, bank_profiles
-    global ml_controller 
+    global ml_controller, regulatory_monitor, regulatory_monitor, regulatory_monitor 
     
     try:
         # 1. Load RF Baseline (Legacy/Fallback)
@@ -86,6 +91,13 @@ def load_ml_components():
             logger.info("✅ MLOps Controller Initialized")
         except Exception as e:
             logger.error(f"Failed to initialize MLOps Controller: {e}")
+
+        # 1.2 Initialize Regulatory Monitor
+        try:
+            regulatory_monitor = RegulatoryMonitor()
+            logger.info("✅ Regulatory Monitor Initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Regulatory Monitor: {e}")
             
         # 2. Load JSON Helpers
         try:
@@ -1149,3 +1161,59 @@ async def dev_session_check(user_payload: dict = Depends(verify_token)):
         "access_token_present": True,
         "mode": "dev_verification"
     }
+
+# --- Admin / System Endpoints ---
+@app.post("/admin/trigger-regulatory-audit", tags=["Admin"])
+def trigger_regulatory_audit_api(background_tasks: BackgroundTasks, secret: str = Header(..., alias="X-Admin-Secret")):
+    """
+    Manually triggers the Regulatory Audit (Schemes & Rules) in the background.
+    Requires 'X-Admin-Secret' header.
+    """
+    # Simple auth for admin task
+    if secret != os.getenv("ADMIN_SECRET", "twxai_admin"): # Default fallback if env not set
+        raise HTTPException(status_code=403, detail="Invalid Admin Secret")
+    
+    if not regulatory_monitor:
+        raise HTTPException(status_code=503, detail="Regulatory Monitor not initialized")
+    
+    def run_audit_task():
+        logger.info("[Background] Starting Regulatory Audit...")
+        try:
+            if os.path.exists("schemes.json"):
+                regulatory_monitor.process_schemes("schemes.json")
+            if os.path.exists("rules.json"):
+                regulatory_monitor.process_rules("rules.json")
+            logger.info("[Background] Regulatory Audit Complete.")
+        except Exception as e:
+            logger.error(f"[Background] Regulatory Audit Failed: {e}")
+
+    background_tasks.add_task(run_audit_task)
+    return {"status": "Audit triggered in background", "log_file": "regulatory_audit_log.csv"}
+
+# --- Admin / System Endpoints ---
+@app.post("/admin/trigger-regulatory-audit", tags=["Admin"])
+def trigger_regulatory_audit_api(background_tasks: BackgroundTasks, secret: str = Header(..., alias="X-Admin-Secret")):
+    """
+    Manually triggers the Regulatory Audit (Schemes & Rules) in the background.
+    Requires 'X-Admin-Secret' header.
+    """
+    # Simple auth for admin task
+    if secret != os.getenv("ADMIN_SECRET", "twxai_admin"): # Default fallback if env not set
+        raise HTTPException(status_code=403, detail="Invalid Admin Secret")
+    
+    if not regulatory_monitor:
+        raise HTTPException(status_code=503, detail="Regulatory Monitor not initialized")
+    
+    def run_audit_task():
+        logger.info("[Background] Starting Regulatory Audit...")
+        try:
+            if os.path.exists("schemes.json"):
+                regulatory_monitor.process_schemes("schemes.json")
+            if os.path.exists("rules.json"):
+                regulatory_monitor.process_rules("rules.json")
+            logger.info("[Background] Regulatory Audit Complete.")
+        except Exception as e:
+            logger.error(f"[Background] Regulatory Audit Failed: {e}")
+
+    background_tasks.add_task(run_audit_task)
+    return {"status": "Audit triggered in background", "log_file": "regulatory_audit_log.csv"}

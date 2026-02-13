@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "version": "1.0"
+  },
+  "schemes": [
+    {
+      "id": "test_valid_scheme",
+      "name": "Pradhan Mantri Jan Dhan Yojana",
+      "url": "https://pmjdy.gov.in",
+      "content_hash": ""
+    },
+    {
+      "id": "test_broken_scheme",
+      "name": "Pradhan Mantri Mudra Yojana",
+      "url": "https://www.broken-mudra-link.gov.in",
+      "content_hash": ""
+    }
+  ]
+}
