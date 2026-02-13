@@ -7,8 +7,8 @@ import { Suspense } from "react"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "AI Loan Platform - Fair & Inclusive Lending",
-  description: "Explainable AI-Driven MLOps Framework for Fair and Inclusive Loan Decision-Making",
+  title: "XAI Loan Advisory System",
+  description: "XAI Loan Advisory System",
   generator: "v0.app",
 }
 

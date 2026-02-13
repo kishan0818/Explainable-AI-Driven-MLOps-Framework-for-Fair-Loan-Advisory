@@ -234,7 +234,7 @@ export function ModelPrediction({
         <CardHeader>
           <CardTitle className="flex items-center">
             <Wallet className="w-5 h-5 mr-2" />
-            Banking Partners
+            Banks Recommended
           </CardTitle>
           <CardDescription>Lenders whose criteria match your profile</CardDescription>
         </CardHeader>

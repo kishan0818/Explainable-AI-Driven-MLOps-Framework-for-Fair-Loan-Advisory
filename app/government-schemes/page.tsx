@@ -68,10 +68,10 @@ export default function GlobalSchemesPage() {
         <div className="min-h-screen bg-background">
             <Navbar title="Government Schemes & Rules" userRole="Applicant" />
 
-            <div className="container mx-auto p-6 max-w-6xl space-y-8 animate-in fade-in">
+            <div className="w-full px-4 md:px-6 space-y-8 animate-in fade-in">
 
                 {/* Back Button */}
-                <Button variant="ghost" asChild className="pl-0 hover:bg-transparent -ml-2">
+                <Button variant="ghost" asChild className="pl-0 hover:bg-transparent -ml-2 mt-5">
                     <Link href="/user/dashboard">
                         <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard
                     </Link>

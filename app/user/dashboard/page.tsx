@@ -182,7 +182,7 @@ export default function UserDashboard() {
       <div className="min-h-screen bg-background">
         <Navbar title="Application Review" userRole="Applicant" />
         <div className="w-full px-4 md:px-6 space-y-6">
-          <Button variant="ghost" onClick={handleBack} className="mb-4 pl-0 hover:bg-transparent">
+          <Button variant="ghost" onClick={handleBack} className="mb-4 pl-0 hover:bg-transparent mt-5">
             <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard
           </Button>
           <ModelPrediction initialResult={tempApp} mode="view" referenceData={referenceData} />
@@ -200,7 +200,7 @@ export default function UserDashboard() {
         <div className="w-full px-4 md:px-6 space-y-6 animate-in fade-in">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <Button variant="ghost" onClick={handleBack} className="mb-2 pl-0 hover:bg-transparent">
+              <Button variant="ghost" onClick={handleBack} className="mb-2 pl-0 hover:bg-transparent mt-5">
                 <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard
               </Button>
               <h1 className="text-3xl font-bold capitalize">{selectedApp.type} Application</h1>
@@ -228,7 +228,7 @@ export default function UserDashboard() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Welcome Back</h1>
+            <h1 className="text-3xl font-bold tracking-tight mt-6">Welcome Back</h1>
             <p className="text-muted-foreground mt-1">Track your applications and explore schemes.</p>
           </div>
           <div className="flex gap-3">
@@ -244,12 +244,12 @@ export default function UserDashboard() {
         </div>
 
         {view === 'rules' ? (
-          <div className="space-y-6">
+          <div className="space-y-6 mt-5">
             <Button variant="ghost" onClick={() => setView('list')} className="pl-0"><ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard</Button>
             <RulesAndSchemesEngine referenceData={referenceData} />
           </div>
         ) : view === 'new' ? (
-          <div className="space-y-6">
+          <div className="space-y-6 mt-5">
             <Button variant="ghost" onClick={() => setView('list')} className="pl-0"><ArrowRight className="w-4 h-4 mr-2 rotate-180" /> Back to Dashboard</Button>
             <NewApplicationForm onPredictionComplete={handleCreationSuccess} />
           </div>

@@ -92,14 +92,14 @@ export default function LoginPage() {
               <Building2 className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">AI Loan Platform</h1>
-              <p className="text-muted-foreground">Fair & Inclusive Lending</p>
+              <h1 className="text-2xl font-bold text-foreground">Explainable AI-Based Loan Advisory System</h1>
+              <p className="text-muted-foreground">Bank and Government Schemes</p>
             </div>
           </div>
 
           <div className="space-y-6">
             <h2 className="text-4xl font-bold text-balance leading-tight">
-              Explainable AI-Driven Loan Decision Making
+              Explainable AI-Based Loan Advisory System
             </h2>
             <p className="text-lg text-muted-foreground text-pretty">
               Advanced MLOps framework ensuring fair, transparent, and inclusive loan decisions with regulatory

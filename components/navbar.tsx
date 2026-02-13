@@ -23,7 +23,7 @@ export function Navbar({ title, userRole }: NavbarProps) {
             <Building2 className="w-4 h-4 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-semibold text-foreground">AI Loan Platform</h1>
+            <h1 className="font-semibold text-foreground">Explainable AI-Based Loan Advisory System</h1>
             {userRole && (
               <p className="text-xs text-muted-foreground">{userRole}</p>
             )}
