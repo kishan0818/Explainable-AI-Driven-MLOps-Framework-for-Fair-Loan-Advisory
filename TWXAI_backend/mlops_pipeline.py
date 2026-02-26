@@ -66,8 +66,23 @@ class DriftDetector:
     """
     Monitors feature distribution drift using KL Divergence.
     """
-    def __init__(self, reference_data: Optional[pd.DataFrame] = None):
-        self.reference_data = reference_data
+    """
+    Monitors feature distribution drift using KL Divergence.
+    """
+    def __init__(self):
+        try:
+            # Load training data as reference for drift detection
+            self.reference_data = pd.read_csv("loan_default_data.csv")
+            # Drop target and non-feature columns if present
+            if 'Default' in self.reference_data.columns:
+                self.reference_data = self.reference_data.drop('Default', axis=1)
+            if 'LoanID' in self.reference_data.columns:
+                self.reference_data = self.reference_data.drop('LoanID', axis=1)
+            logger.info("✅ Drift Detector: Reference data loaded.")
+        except Exception as e:
+            logger.warning(f"Drift Detector: Failed to load reference data: {e}")
+            self.reference_data = None
+            
         self.threshold = 0.1 # Threshold for drift alert
 
     def compute_drift(self, current_batch: pd.DataFrame) -> Dict[str, float]:
@@ -169,13 +184,16 @@ class DualModelController:
         
         # Load Primary Model
         self.load_primary_model()
+        # Load Adaptive Model
+        self.load_adaptive_model()
 
     def load_primary_model(self):
         """Loads the model marked as PRIMARY in DB."""
         meta = self.registry.get_active_model('standard')
         if not meta:
             logger.warning("No active primary model found in registry. Using fallback.")
-            return
+            # return # Continue to try loading adaptive or defaults
+
 
         path = meta.get('path')
         version = meta.get('version')
@@ -203,6 +221,28 @@ class DualModelController:
         else:
             logger.error(f"Model file not found: {full_path}")
             self.sm_model = None
+
+    def load_adaptive_model(self):
+        """Loads the Adaptive Model (Candidate)."""
+        # Hardcoded path for now, or fetch from registry as 'adaptive'
+        path = 'results_rf_smote_controlled_pca1_wocs/models/xgboost_adaptive.json'
+        # Check current dir or subdirectory
+        if os.path.exists(path):
+            full_path = path
+        else:
+            full_path = os.path.join('TWXAI_backend', path)
+        
+        if os.path.exists(full_path):
+            try:
+                self.am_model = xgb.XGBClassifier()
+                self.am_model.load_model(full_path)
+                logger.info(f"✅ Loaded Adaptive Model: {path}")
+            except Exception as e:
+                logger.error(f"Failed to load adaptive model: {e}")
+                self.am_model = None
+        else:
+            logger.info(f"Adaptive model not found at {full_path}. Skipping.")
+            self.am_model = None
 
     def predict(self, model_input: Any, raw_input: pd.DataFrame, context: Dict = {}) -> Dict:
         """
@@ -236,9 +276,45 @@ class DualModelController:
         except Exception as e:
             logger.warning(f"SHAP calculation failed: {e}")
         
-        # 3. Monitor Drift (Async ideal, sync for now)
-        # drift_score = self.drift_detector.compute_drift(raw_input) 
-        
+        # 3. Monitor Drift (Simple Sync Check)
+        drift_scores = {}
+        max_drift = 0.0
+        try:
+             # Ensure raw_input is DataFrame
+             if isinstance(raw_input, dict):
+                 raw_df = pd.DataFrame([raw_input])
+             elif isinstance(raw_input, pd.DataFrame):
+                 raw_df = raw_input
+             else:
+                 raw_df = None
+             
+             if raw_df is not None:
+                drift_scores = self.drift_detector.compute_drift(raw_df) 
+                if drift_scores:
+                    max_drift = max(drift_scores.values())
+        except Exception as e:
+            logger.warning(f"Drift check failed: {e}")
+
+        # --- AUTOMATED SWITCHING LOGIC ---
+        # If Significant Drift Detected AND Adaptive Model Available -> Use Adaptive
+        if max_drift > self.drift_detector.threshold and self.am_model:
+            try:
+                # Switch Prediction to Adaptive Model
+                prob = float(self.am_model.predict_proba(model_input)[0][1])
+                self.active_version = "Adaptive-v1"
+                
+                # Log the switch event
+                self.registry.log_event("model_switch", self.active_version, 
+                                      {"reason": "drift_detected", "drift_score": max_drift, "feature_drift": drift_scores}, 
+                                      "warning")
+            except Exception as e:
+                logger.error(f"Adaptive model prediction failed: {e}")
+                # Fallback to Standard (prob already calculated)
+                
+        elif max_drift > self.drift_detector.threshold and not self.am_model:
+             # Log drift alert even if no switch possible
+             self.registry.log_event("drift_alert", self.active_version, {"drift_score": max_drift}, "warning")
+
         # 4. Monitor Fairness
         # Update monitor
         self.fairness_monitor.update(context, prob)
