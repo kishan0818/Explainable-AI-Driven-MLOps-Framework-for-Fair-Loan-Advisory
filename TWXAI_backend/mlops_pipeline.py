@@ -192,8 +192,7 @@ class DualModelController:
         meta = self.registry.get_active_model('standard')
         if not meta:
             logger.warning("No active primary model found in registry. Using fallback.")
-            # return # Continue to try loading adaptive or defaults
-
+            return # Continue to try loading adaptive or defaults
 
         path = meta.get('path')
         version = meta.get('version')

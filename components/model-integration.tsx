@@ -245,8 +245,15 @@ export function ModelPrediction({
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="font-bold text-lg">{bank.bank_name}</div>
-                    <div className="text-sm mt-1 flex items-center text-muted-foreground">
-                      <Info className="w-3 h-3 mr-1" /> {bank.reason}
+                    <div className="text-sm mt-1 flex flex-col gap-1 text-muted-foreground">
+                      <div className="flex items-center">
+                        <Info className="w-3 h-3 mr-1" /> {bank.reason}
+                      </div>
+                      {bank.loan_amount && bank.repayment_amount && bank.interest_rate && (
+                        <div className="mt-2 text-sm bg-muted/30 p-2 rounded-md border text-foreground w-fit">
+                          <span className="font-medium">Loan amount:</span> ₹{bank.loan_amount.toLocaleString()} <span className="text-muted-foreground mx-1">|</span> <span className="font-medium text-primary">Repayment:</span> ₹{bank.repayment_amount.toLocaleString()} <span className="text-muted-foreground mx-1">|</span> <span className="font-medium">Interest:</span> {bank.interest_rate}%
+                        </div>
+                      )}
                     </div>
                   </div>
                   <Badge className={bank.suitability === 'high' ? 'bg-success' : bank.suitability === 'medium' ? 'bg-warning' : 'bg-muted text-muted-foreground'}>
