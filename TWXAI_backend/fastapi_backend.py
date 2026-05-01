@@ -62,7 +62,9 @@ async def verify_recaptcha(token: str) -> bool:
                 data={
                     "secret": RECAPTCHA_SECRET_KEY,
                     "response": token
-                }
+                },
+                timeout=15.0,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             )
             result = response.json()
             if result.get("success"):
@@ -70,7 +72,7 @@ async def verify_recaptcha(token: str) -> bool:
             logger.warning(f"❌ reCAPTCHA Failed: {result.get('error-codes')}")
             return False
     except Exception as e:
-        logger.error(f"reCAPTCHA Verification Error: {e}")
+        logger.error(f"reCAPTCHA Verification Error: {repr(e)}")
         return False
 
 security = HTTPBearer()
@@ -308,7 +310,8 @@ async def call_perplexity_api(query: str, context: str):
     
     headers = {
         "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     async with httpx.AsyncClient() as client:
@@ -318,10 +321,10 @@ async def call_perplexity_api(query: str, context: str):
                 data = res.json()
                 return data['choices'][0]['message']['content']
             else:
-                logger.error(f"Perplexity API Error: {res.text}")
+                logger.error(f"Perplexity API Error [{res.status_code}]: {res.text[:200]}")
                 return "I'm having trouble connecting to my knowledge base right now."
         except Exception as e:
-            logger.error(f"Perplexity Connection Error: {e}")
+            logger.error(f"Perplexity Connection Error: {repr(e)}")
             return "I'm experiencing connectivity issues. Please try again later."
 
 # --- Helper for Preprocessing ---
