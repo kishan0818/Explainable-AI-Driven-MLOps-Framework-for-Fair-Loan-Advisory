@@ -22,3 +22,4 @@ python-jose[cryptography]>=3.3.0
 python-dotenv>=1.0.0
 pydantic[email]>=1.10.0
 xgboost
+requests
