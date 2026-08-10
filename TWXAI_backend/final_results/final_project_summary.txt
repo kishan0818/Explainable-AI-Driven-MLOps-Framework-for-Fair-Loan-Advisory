@@ -1,0 +1,29 @@
+FINAL PROJECT SUMMARY: Explainable AI-Driven MLOps Framework
+======================================================
+Date Generated: 2026-05-01 11:49:50
+Random State: 42
+
+A. KEY IMPROVEMENTS
+------------------------------------------------------
+- Recall improved from 0.069 to ~0.439 via threshold tuning (0.20).
+- Lowering decision threshold increases sensitivity to minority default cases.
+- We quantified the exact tradeoff between Demographic Parity and Recall.
+
+B. FAIRNESS INTERPRETATION
+------------------------------------------------------
+- Group-wise thresholding improved inclusion (Disparate Impact ↑) but increased Demographic Parity Difference, illustrating inherent trade-offs.
+- Why DP worsened: In loan datasets, unprivileged groups naturally exhibit different base default rates. Forcing equal false positive rates (to improve inclusion and equal opportunity) mathematically shifts Demographic Parity negatively when base rates differ.
+
+C. MODEL JUSTIFICATION
+------------------------------------------------------
+- Best balance of Recall, PR-AUC, and stability across folds.
+- XGBoost consistently outperformed Logistic Regression and Random Forest on PR-AUC, making it strictly better for highly imbalanced default data.
+
+D. DRIFT ROBUSTNESS
+------------------------------------------------------
+- Adaptive retraining recovers performance under simulated distribution shifts.
+- Drift visualizations successfully demonstrate that while unmitigated drift damages PR-AUC and fairness, real-time retraining loops restore these metrics to baseline levels.
+
+E. FINAL STATEMENT
+------------------------------------------------------
+This framework demonstrates a novel, end-to-end MLOps pipeline capable of evaluating performance and fairness simultaneously under dynamic conditions. By explicating calibration metrics, SHAP-derived interpretability, and the explicit fairness-performance trade-off, this pipeline represents a significant empirical contribution to building trustworthy, inclusive financial systems.
