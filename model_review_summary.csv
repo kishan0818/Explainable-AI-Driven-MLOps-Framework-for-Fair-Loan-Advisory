@@ -1,0 +1,7 @@
+"Category","Details"
+"Tools Used","XGBoost, Scikit-learn, Pandas, FastAPI, Supabase, Next.js, SHAP, and LIME for Model Interpretability."
+"Model Review Process","Conducted 5-fold cross-validation. Evaluated drift metrics (Income Shift, Feature Noise, Class Imbalance) and measured recovery recall. Analyzed threshold metrics for precision-recall trade-offs and demographic parity."
+"Accuracy / Metrics","XGBoost (Production): ROC-AUC of 0.756, PR-AUC of 0.326, Precision of 0.596, Recall of 0.069. CV ROC-AUC is highly stable at ~0.752. The model exhibits strong precision but very low baseline recall."
+"Failure Cases / Weaknesses","1. High False Negative Rate: Extremely low baseline recall (0.069) implies many default cases are missed.
+2. Drift Vulnerability: Income shift led to a 9.88% delta in recall and a 0.13 drop in demographic parity. Feature noise dropped PR-AUC by 0.063.
+3. Class Imbalance: Strongly skewed data restricts the model's ability to confidently predict defaults without aggressive threshold tuning."
