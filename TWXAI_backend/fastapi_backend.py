@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header, Security
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header, Security, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -275,17 +275,38 @@ def search_knowledge_base(query: str):
     # Limit Context
     return "\n\n".join(context_chunks[:5]), list(set(related_schemes[:3])), list(set(related_rules[:3]))
 
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+# --- Rate Limiter ---
+import time
 
-async def call_perplexity_api(query: str, context: str):
+chat_rate_limit = {} # IP -> list of timestamps
+RATE_LIMIT_SECONDS = 60
+MAX_REQUESTS_PER_MINUTE = 5
+
+async def rate_limiter(req: Request):
+    client_ip = req.client.host if req.client else "unknown"
+    now = time.time()
+    
+    if client_ip not in chat_rate_limit:
+        chat_rate_limit[client_ip] = []
+        
+    chat_rate_limit[client_ip] = [t for t in chat_rate_limit[client_ip] if now - t < RATE_LIMIT_SECONDS]
+    
+    if len(chat_rate_limit[client_ip]) >= MAX_REQUESTS_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later to conserve API tokens.")
+        
+    chat_rate_limit[client_ip].append(now)
+
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+
+async def call_llm_api(query: str, context: str):
     """
-    Call Perplexity Sonar API for grounding answer.
+    Call NVIDIA API (OpenAI Compatible) for grounding answer.
     """
-    if not PERPLEXITY_API_KEY:
-        logger.warning("Perplexity API Key missing!")
+    if not NVIDIA_API_KEY:
+        logger.warning("NVIDIA API Key missing!")
         return "I'm sorry, I cannot access external knowledge right now related to the internet.", []
         
-    url = "https://api.perplexity.ai/chat/completions"
+    url = "https://integrate.api.nvidia.com/v1/chat/completions"
     
     system_prompt = (
         "You are an expert AI Loan Assistant for Indian government schemes and RBI regulations. "
@@ -303,15 +324,17 @@ async def call_perplexity_api(query: str, context: str):
     ]
     
     payload = {
-        "model": "sonar",
+        "model": "openai/gpt-oss-20b",
         "messages": messages,
-        "temperature": 0.2
+        "temperature": 1.0,
+        "top_p": 1,
+        "max_tokens": 4096,
+        "stream": False
     }
     
     headers = {
-        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "Authorization": f"Bearer {NVIDIA_API_KEY}",
+        "Content-Type": "application/json"
     }
     
     async with httpx.AsyncClient() as client:
@@ -319,12 +342,15 @@ async def call_perplexity_api(query: str, context: str):
             res = await client.post(url, json=payload, headers=headers, timeout=30.0)
             if res.status_code == 200:
                 data = res.json()
+                reasoning = data['choices'][0]['message'].get('reasoning_content')
+                if reasoning:
+                    logger.info(f"Reasoning: {reasoning}")
                 return data['choices'][0]['message']['content']
             else:
-                logger.error(f"Perplexity API Error [{res.status_code}]: {res.text[:200]}")
+                logger.error(f"NVIDIA API Error [{res.status_code}]: {res.text[:200]}")
                 return "I'm having trouble connecting to my knowledge base right now."
         except Exception as e:
-            logger.error(f"Perplexity Connection Error: {repr(e)}")
+            logger.error(f"NVIDIA Connection Error: {repr(e)}")
             return "I'm experiencing connectivity issues. Please try again later."
 
 # --- Helper for Preprocessing ---
@@ -421,13 +447,13 @@ def prepare_features(app_in: LoanApplication, encoders: dict, scaler=None, is_xg
     
     return df
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(rate_limiter)])
 async def chat_endpoint(req: ChatRequest):
     # 1. Search Local Knowledge
     context, schemes, rules = search_knowledge_base(req.query)
     
     # 2. Call LLM
-    answer = await call_perplexity_api(req.query, context)
+    answer = await call_llm_api(req.query, context)
     
     return {
         "answer": answer,
