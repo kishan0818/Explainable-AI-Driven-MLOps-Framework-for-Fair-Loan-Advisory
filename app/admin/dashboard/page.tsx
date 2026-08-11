@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Loader2, Shield, Activity, FileText, Server, AlertTriangle } from "lucide-react"
+import { Loader2, Shield, Activity, FileText, Server, AlertTriangle, Terminal } from "lucide-react"
 
 export default function AdminDashboardPage() {
     const [loading, setLoading] = useState(true)
@@ -145,11 +145,14 @@ export default function AdminDashboardPage() {
                         <Badge variant={stats?.fairness_alerts > 0 ? "destructive" : "outline"} className="px-3 py-1">
                             Fairness Alerts: {stats?.fairness_alerts ?? 0}
                         </Badge>
+                        <Badge variant={stats?.security_alerts > 0 ? "destructive" : "outline"} className="px-3 py-1">
+                            Security Alerts: {stats?.security_alerts ?? 0}
+                        </Badge>
                     </div>
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-5">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                             <CardTitle className="text-sm font-medium">Active Model</CardTitle>
@@ -192,7 +195,18 @@ export default function AdminDashboardPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">Online</div>
-                            <p className="text-xs text-muted-foreground">Last Updated: {new Date(stats?.last_updated).toLocaleTimeString()}</p>
+                            <p className="text-xs text-muted-foreground">Last Updated: {stats?.last_updated ? new Date(stats.last_updated).toLocaleTimeString() : 'N/A'}</p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardTitle className="text-sm font-medium">LLM Telemetry (Langfuse)</CardTitle>
+                            <Terminal className="w-4 h-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats?.llm_requests ?? 0} Queries</div>
+                            <p className="text-xs text-muted-foreground">Avg Latency: {stats?.avg_latency ?? "0.0s"}</p>
                         </CardContent>
                     </Card>
                 </div>
