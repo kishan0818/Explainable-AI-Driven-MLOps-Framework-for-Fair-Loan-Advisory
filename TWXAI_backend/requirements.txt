@@ -23,3 +23,7 @@ python-dotenv>=1.0.0
 pydantic[email]>=1.10.0
 xgboost
 requests
+langchain
+langchain-community
+langchain-openai
+langgraph

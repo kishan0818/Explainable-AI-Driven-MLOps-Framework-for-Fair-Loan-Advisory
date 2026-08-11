@@ -22,6 +22,7 @@ import httpx
 import xgboost as xgb
 import jwt
 from regulatory_monitor import RegulatoryMonitor
+import agent_core
 
 # Load environment variables
 load_dotenv()
@@ -172,6 +173,8 @@ def load_ml_components():
 async def lifespan(app: FastAPI):
     if load_ml_components():
         logger.info("✅ System Components Loaded")
+        agent_core.initialize_tools(search_knowledge_base)
+        logger.info("✅ LangChain Agent Tools Initialized")
     else:
         logger.error("❌ Component Loading Failed")
     yield
@@ -237,6 +240,7 @@ class AnalysisResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     query: str
+    session_id: Optional[str] = Field("default", description="Session ID for conversational memory")
 
 class ChatResponse(BaseModel):
     answer: str
@@ -449,17 +453,28 @@ def prepare_features(app_in: LoanApplication, encoders: dict, scaler=None, is_xg
 
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(rate_limiter)])
 async def chat_endpoint(req: ChatRequest):
-    # 1. Search Local Knowledge
-    context, schemes, rules = search_knowledge_base(req.query)
-    
-    # 2. Call LLM
-    answer = await call_llm_api(req.query, context)
-    
-    return {
-        "answer": answer,
-        "related_schemes": schemes,
-        "related_rules": rules
-    }
+    try:
+        agent = agent_core.get_agent()
+        config = {"configurable": {"thread_id": req.session_id}}
+        
+        # Invoke the LangGraph agent asynchronously
+        messages = await agent.ainvoke({"messages": [("user", req.query)]}, config)
+        
+        # Extract the final response
+        final_message = messages["messages"][-1].content
+        
+        return {
+            "answer": final_message,
+            "related_schemes": [],  # Can be parsed from context or agent state if needed
+            "related_rules": []
+        }
+    except Exception as e:
+        logger.error(f"Agent Error: {e}")
+        return {
+            "answer": "I'm having trouble connecting to my knowledge base right now.",
+            "related_schemes": [],
+            "related_rules": []
+        }
 
 
 # --- Auth Endpoints ---
@@ -1021,13 +1036,15 @@ def build_explanation(risk_score, risk_band, rules_res, schemes_res, improvement
     
     violation_count = len(failed_hard) + len(failed_soft)
     
-    if failed_hard:
-        # Advisory wording for hard blocking rules
-        summary += f"Eligibility gaps detected due to {violation_count} rule violations."
+    if failed_hard or failed_soft:
+        # Extract rule descriptions to make the summary explain exactly what failed
+        failed_descriptions = [r['description'] for r in (failed_hard + failed_soft)]
+        # Add bullet points for readability
+        desc_bullets = "\\n".join([f"• {desc}" for desc in failed_descriptions])
+        
+        summary += f"Eligibility gaps detected due to {violation_count} rule violations:\\n{desc_bullets}"
     elif risk_band == "high":
         summary += "Not recommended under current eligibility conditions due to high risk factors."
-    elif violation_count > 0:
-        summary += f"Eligibility gaps detected due to {violation_count} rule violations."
     else:
         summary += "Application meets eligibility criteria."
         

@@ -171,7 +171,7 @@ export function ModelPrediction({
 
           <div className="flex flex-col md:flex-row gap-6 mt-4">
             <div className="flex-1">
-              <p className="text-foreground text-lg leading-relaxed">
+              <p className="text-foreground text-lg leading-relaxed whitespace-pre-line">
                 {prediction.decisionSummary?.replace(/Risk Score: \d+ \([A-Z]+\)\.\s*/, '')}
               </p>
             </div>
