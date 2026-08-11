@@ -6,23 +6,39 @@ Phase 1: Stabilization & Consolidated Analysis Pipeline
 import os
 import json
 import logging
+# pyrefly: ignore [missing-import]
 import joblib
+# pyrefly: ignore [missing-import]
 import numpy as np
+# pyrefly: ignore [missing-import]
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header, Security, Request
+# pyrefly: ignore [missing-import]
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+# pyrefly: ignore [missing-import]
 from supabase import create_client, Client
+# pyrefly: ignore [missing-import]
 import httpx
-import xgboost as xgb
+# pyrefly: ignore [missing-import]
+import xgboost as xgb   
+# pyrefly: ignore [missing-import]
 import jwt
+# pyrefly: ignore [missing-import]
 from regulatory_monitor import RegulatoryMonitor
+# pyrefly: ignore [missing-import]
 import agent_core
+from security_filters import SecurityShield
+from observability_config import get_telemetry_handler
 
 # Load environment variables
 load_dotenv()
@@ -93,17 +109,13 @@ bank_loan_data = {}
 bank_profiles = [] # Loaded from DB or Fallback
 
 # --- LifeCycle & Loading ---
-# --- LifeCycle & Loading ---
 # Global Controller Reference
 ml_controller = None
-regulatory_monitor = None
-regulatory_monitor = None
-regulatory_monitor = None
 regulatory_monitor = None
 
 def load_ml_components():
     global model, feature_selector, label_encoders, pca, rules_data, schemes_data, bank_loan_data, bank_profiles
-    global ml_controller, regulatory_monitor, regulatory_monitor, regulatory_monitor 
+    global ml_controller, regulatory_monitor 
     
     try:
         # 1. Load RF Baseline (Legacy/Fallback)
@@ -255,6 +267,7 @@ def get_embeddings():
     global _vector_embeddings
     if _vector_embeddings is None:
         try:
+            # pyrefly: ignore [missing-import]
             from langchain_huggingface import HuggingFaceEmbeddings
             _vector_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
             logger.info("✅ Initialized local HuggingFace embeddings (all-MiniLM-L6-v2).")
@@ -509,18 +522,98 @@ def prepare_features(app_in: LoanApplication, encoders: dict, scaler=None, is_xg
 
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(rate_limiter)])
 async def chat_endpoint(req: ChatRequest):
+    # 1. Prompt Injection Shield
+    if SecurityShield.detect_prompt_injection(req.query):
+        try:
+            if supabase:
+                supabase.table("mlops_logs").insert({
+                    "event_type": "system_info",
+                    "model_version": "meta/llama-3.1-70b-instruct",
+                    "details": {
+                        "alert_type": "security_alert",
+                        "sub_type": "prompt_injection",
+                        "raw_query": req.query[:500]
+                    },
+                    "severity": "critical"
+                }).execute()
+        except Exception as e:
+            logger.error(f"Failed to log security alert: {e}")
+            
+        raise HTTPException(
+            status_code=400, 
+            detail="Security Warning: Query rejected due to safety policy violations."
+        )
+
+    # 2. PII Masking
+    masked_query, mask_map = SecurityShield.mask_input(req.query)
+    
+    if mask_map:
+        try:
+            if supabase:
+                supabase.table("mlops_logs").insert({
+                    "event_type": "system_info",
+                    "model_version": "meta/llama-3.1-70b-instruct",
+                    "details": {
+                        "alert_type": "security_alert",
+                        "sub_type": "pii_masked",
+                        "masked_fields": list(mask_map.keys())
+                    },
+                    "severity": "warning"
+                }).execute()
+        except Exception as e:
+            logger.error(f"Failed to log PII alert: {e}")
+
     try:
         agent = agent_core.get_agent()
-        config = {"configurable": {"thread_id": req.session_id}}
+        
+        # 3. Observability Callbacks Handler
+        handler = get_telemetry_handler()
+        config = {
+            "configurable": {"thread_id": req.session_id},
+            "metadata": {
+                "langfuse_session_id": req.session_id
+            }
+        }
+        if handler:
+            config["callbacks"] = [handler]
         
         # Invoke the LangGraph agent asynchronously
-        messages = await agent.ainvoke({"messages": [("user", req.query)]}, config)
+        start_time = time.time()
+        messages = await agent.ainvoke(
+            {
+                "messages": [("user", masked_query)],
+                "reflection_count": 0,
+                "needs_correction": False
+            }, 
+            config
+        )
+        latency = time.time() - start_time
         
         # Extract the final response
         final_message = messages["messages"][-1].content
         
+        # 4. PII Unmasking
+        unmasked_message = SecurityShield.unmask_output(final_message, mask_map)
+        
+        # Log LLM stats to mlops_logs for dashboard tracking
+        try:
+            if supabase:
+                supabase.table("mlops_logs").insert({
+                    "event_type": "prediction",
+                    "model_version": "meta/llama-3.1-70b-instruct",
+                    "details": {
+                        "latency_seconds": round(latency, 4),
+                        "query_length": len(req.query),
+                        "response_length": len(unmasked_message),
+                        "pii_masked_count": len(mask_map)
+                    },
+                    "severity": "info"
+                }).execute()
+        except Exception as e:
+            logger.error(f"Failed to log execution telemetry: {e}")
+            
         return {
-            "answer": final_message,
+            "answer": unmasked_message,
             "related_schemes": [],  # Can be parsed from context or agent state if needed
             "related_rules": []
         }
@@ -1487,28 +1580,51 @@ def get_admin_stats(user: dict = Depends(verify_token), secret: str = Header(Non
     """
     Returns high-level MLOps metrics for the dashboard.
     """
-    # RBAC: Allow if Admin Secret OR User Role is Admin
-    admin_email = os.getenv("ADMIN_EMAIL")
-    is_admin_secret = secret == os.getenv("ADMIN_SECRET", "twxai_admin")
-    is_admin_role = user.get("role") in ["service_role", "admin"] or (admin_email and user.get("email") == admin_email)
-    
-    if not (is_admin_secret or is_admin_role):
-         # Allow authenticated for MVP but log warning
-         pass
-         
     # 1. Model Status
-    active_model = "XGBoost (Production)"
+    active_model = "XGBoost (Production)" if xgb_model else "RandomForest (Baseline)"
     version = ml_controller.active_version if ml_controller else "1.0.0"
     
-    # 2. Alerts
+    # 2. Query Alerts and Telemetry from Database
     drift_alerts = 0
     fairness_alerts = 0
+    security_alerts = 0
+    llm_requests = 0
+    avg_latency = "0.0s"
+    
+    try:
+        if supabase:
+            # Query recent MLOps logs
+            res = supabase.table("mlops_logs").select("*").execute()
+            if res.data:
+                logs = res.data
+                drift_alerts = sum(1 for log in logs if log.get("event_type") in ["drift_alert", "model_switch"])
+                fairness_alerts = sum(1 for log in logs if log.get("event_type") == "fairness_alert")
+                security_alerts = sum(1 for log in logs if log.get("event_type") == "security_alert" or (log.get("event_type") == "system_info" and (log.get("details") or {}).get("alert_type") == "security_alert"))
+                
+                # Telemetry
+                llm_logs = [log for log in logs if log.get("event_type") == "prediction" and "llama" in str(log.get("model_version")).lower()]
+                llm_requests = len(llm_logs)
+                if llm_requests > 0:
+                    latencies = []
+                    for log in llm_logs:
+                        details = log.get("details") or {}
+                        lat = details.get("latency_seconds")
+                        if lat is not None:
+                            try: latencies.append(float(lat))
+                            except: pass
+                    if latencies:
+                        avg_latency = f"{round(sum(latencies) / len(latencies), 2)}s"
+    except Exception as e:
+        logger.error(f"Failed to query stats from Supabase: {e}")
     
     return {
         "active_model": active_model,
         "version": version,
         "drift_alerts": drift_alerts,
         "fairness_alerts": fairness_alerts,
+        "security_alerts": security_alerts,
+        "llm_requests": llm_requests,
+        "avg_latency": avg_latency,
         "last_updated": datetime.now().isoformat()
     }
 
@@ -1547,176 +1663,4 @@ def get_mlops_logs(user: dict = Depends(verify_token)):
         logger.error(f"Failed to fetch MLOps logs: {e}")
         return {"logs": [], "error": str(e)}
 
-# --- Admin Dashboard Endpoints ---
 
-@app.get("/admin/stats", tags=["Admin"])
-def get_admin_stats(user: dict = Depends(verify_token), secret: str = Header(None, alias="X-Admin-Secret")):
-    # RBAC: Allow if Admin Secret OR User Role is Admin
-    is_admin_secret = secret == os.getenv("ADMIN_SECRET", "twxai_admin")
-    is_admin_role = user.get("role") == "service_role" or user.get("email") in ["admin@twxai.com", "jayak@twxai.com"] # Simple whitelist or role check if Supabase role not custom
-    # Supabase "authenticated" role is default. "service_role" is for backend.
-    # If we want real Admin, we should use a custom claim or just check specific emails for Phase 10 MVP.
-    # Let's check "active_model" access.
-    
-    if not (is_admin_secret or is_admin_role):
-         # Raise 403
-         pass
-         # For MVP, let's allow "authenticated" users to see dashboard if they know the URL, OR enforce strictly.
-         # Requirement: "Admin-only access".
-         # Let's enforce strict secret for now if user role isn't clear, OR check email domain?
-         # Let's stick to X-Admin-Secret for simplicity in frontend (stored in ENV specific for Admin Dashboard?)
-         # OR better: The Frontend Dashboard checks "user" object.
-         # Let's allow any authenticated user for this Demo/MVP phase but label it Admin.
-         pass
-         
-    # 1. Model Status
-    active_model = "XGBoost (Production)" if xgb_model else "RandomForest (Baseline)"
-    version = ml_controller.current_version if ml_controller else "v1.0"
-    
-    # 2. Alerts
-    drift_alerts = 0
-    fairness_alerts = 0
-    
-    return {
-        "active_model": active_model,
-        "version": version,
-        "drift_alerts": drift_alerts,
-        "fairness_alerts": fairness_alerts,
-        "last_updated": datetime.now().isoformat()
-    }
-
-@app.get("/admin/logs/regulatory", tags=["Admin"])
-def get_regulatory_logs(user: dict = Depends(verify_token)):
-    # RBAC check could go here
-    log_file = "regulatory_audit_log.csv"
-    if not os.path.exists(log_file):
-        return {"logs": []}
-    try:
-        df = pd.read_csv(log_file)
-        # Return last 50, reversed
-        records = df.tail(50).to_dict(orient="records")
-        return {"logs": records[::-1]}
-    except Exception as e:
-        logger.error(f"Failed to read regulatory logs: {e}")
-        return {"logs": [], "error": str(e)}
-
-@app.get("/admin/logs/mlops", tags=["Admin"])
-def get_mlops_logs(user: dict = Depends(verify_token)):
-    try:
-        res = supabase.table("mlops_logs").select("*").order("created_at", desc=True).limit(50).execute()
-        return {"logs": res.data if res.data else []}
-    except Exception as e:
-        logger.error(f"Failed to fetch MLOps logs: {e}")
-        return {"logs": [], "error": str(e)}
-
-# --- Admin Dashboard Endpoints ---
-
-@app.get("/admin/stats", tags=["Admin"])
-def get_admin_stats(secret: str = Header(..., alias="X-Admin-Secret")):
-    """
-    Returns high-level MLOps metrics for the dashboard.
-    """
-    if secret != os.getenv("ADMIN_SECRET", "twxai_admin"):
-        raise HTTPException(status_code=403, detail="Invalid Admin Secret")
-
-    # 1. Model Status
-    active_model = "XGBoost (Production)" if xgb_model else "RandomForest (Baseline)"
-    version = ml_controller.current_version if ml_controller else "v1.0"
-    
-    # 2. Alerts (Mock from logs or DB in future)
-    drift_alerts = 0
-    fairness_alerts = 0
-    
-    return {
-        "active_model": active_model,
-        "version": version,
-        "drift_alerts": drift_alerts,
-        "fairness_alerts": fairness_alerts,
-        "last_updated": datetime.now().isoformat()
-    }
-
-@app.get("/admin/logs/regulatory", tags=["Admin"])
-def get_regulatory_logs(secret: str = Header(..., alias="X-Admin-Secret")):
-    """
-    Reads and returns the last 50 entries from the regulatory audit log CSV.
-    """
-    if secret != os.getenv("ADMIN_SECRET", "twxai_admin"):
-        raise HTTPException(status_code=403, detail="Invalid Admin Secret")
-        
-    log_file = "regulatory_audit_log.csv"
-    if not os.path.exists(log_file):
-        return {"logs": []}
-        
-    try:
-        # Read CSV simply
-        df = pd.read_csv(log_file)
-        # Return last 50, reversed
-        records = df.tail(50).to_dict(orient="records")
-        return {"logs": records[::-1]}
-    except Exception as e:
-        logger.error(f"Failed to read regulatory logs: {e}")
-        return {"logs": [], "error": str(e)}
-
-@app.get("/admin/logs/mlops", tags=["Admin"])
-def get_mlops_logs(secret: str = Header(..., alias="X-Admin-Secret")):
-    """
-    Reads and returns the last 50 entries from the MLOps logs (Supabase).
-    """
-    if secret != os.getenv("ADMIN_SECRET", "twxai_admin"):
-        raise HTTPException(status_code=403, detail="Invalid Admin Secret")
-        
-    try:
-        res = supabase.table("mlops_logs").select("*").order("created_at", desc=True).limit(50).execute()
-        return {"logs": res.data if res.data else []}
-    except Exception as e:
-        logger.error(f"Failed to fetch MLOps logs: {e}")
-        return {"logs": [], "error": str(e)}
-
-# --- Admin Dashboard Endpoints ---
-
-@app.get("/admin/stats", tags=["Admin"])
-def get_admin_stats(secret: str = Header(..., alias="X-Admin-Secret")):
-    """
-    Returns high-level MLOps metrics for the dashboard.
-    """
-    if secret != os.getenv("ADMIN_SECRET", "twxai_admin"):
-        raise HTTPException(status_code=403, detail="Invalid Admin Secret")
-
-    # 1. Model Status
-    active_model = "XGBoost (Production)" if xgb_model else "RandomForest (Baseline)"
-    version = ml_controller.current_version if ml_controller else "v1.0"
-    
-    # 2. Alerts (Mock from logs or DB in future)
-    # Simple drift check: if last log has drift warning?
-    drift_alerts = 0
-    fairness_alerts = 0
-    
-    return {
-        "active_model": active_model,
-        "version": version,
-        "drift_alerts": drift_alerts,
-        "fairness_alerts": fairness_alerts,
-        "last_updated": datetime.now().isoformat()
-    }
-
-@app.get("/admin/logs/regulatory", tags=["Admin"])
-def get_regulatory_logs(secret: str = Header(..., alias="X-Admin-Secret")):
-    """
-    Reads and returns the last 50 entries from the regulatory audit log CSV.
-    """
-    if secret != os.getenv("ADMIN_SECRET", "twxai_admin"):
-        raise HTTPException(status_code=403, detail="Invalid Admin Secret")
-        
-    log_file = "regulatory_audit_log.csv"
-    if not os.path.exists(log_file):
-        return {"logs": []}
-        
-    try:
-        # Read CSV simply
-        df = pd.read_csv(log_file)
-        # Return last 50, reversed
-        records = df.tail(50).to_dict(orient="records")
-        return {"logs": records[::-1]}
-    except Exception as e:
-        logger.error(f"Failed to read regulatory logs: {e}")
-        return {"logs": [], "error": str(e)}
