@@ -27,3 +27,5 @@ langchain
 langchain-community
 langchain-openai
 langgraph
+sentence-transformers
+langchain-huggingface

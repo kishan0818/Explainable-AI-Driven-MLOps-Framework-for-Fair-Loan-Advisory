@@ -249,15 +249,71 @@ class ChatResponse(BaseModel):
 
 # --- RAG Helper Functions ---
 
+_vector_embeddings = None
+
+def get_embeddings():
+    global _vector_embeddings
+    if _vector_embeddings is None:
+        try:
+            from langchain_huggingface import HuggingFaceEmbeddings
+            _vector_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            logger.info("✅ Initialized local HuggingFace embeddings (all-MiniLM-L6-v2).")
+        except Exception as e:
+            logger.error(f"Failed to load embeddings: {e}")
+    return _vector_embeddings
+
 def search_knowledge_base(query: str):
     """
     Search local JSONs for relevant context.
-    Simple keyword matching for Phase 1/2.
+    Attempts PGVector semantic search first, falls back to simple keyword matching.
     """
-    query_lower = query.lower()
+    if not query or not query.strip():
+        return "", [], []
+        
     context_chunks = []
     related_schemes = []
     related_rules = []
+    
+    # --- PHASE 3: PGVector Semantic Search ---
+    try:
+        embeddings = get_embeddings()
+        if embeddings and supabase:
+            query_vector = embeddings.embed_query(query)
+            
+            # Call RPC
+            res = supabase.rpc(
+                'match_knowledge_base', 
+                {'query_embedding': query_vector, 'match_threshold': 0.3, 'match_count': 5}
+            ).execute()
+            
+            if res.data:
+                logger.info(f"PGVector returned {len(res.data)} semantic matches.")
+                for item in res.data:
+                    meta = item.get("metadata", {})
+                    # Structured context preserving metadata
+                    chunk_text = json.dumps({
+                        "content": item.get("content"),
+                        "type": item.get("type"),
+                        "name": meta.get("scheme_name") or meta.get("rule_name") or "Unknown",
+                        "source": meta.get("source"),
+                        "id": meta.get("scheme_id") or meta.get("rule_id"),
+                        "similarity": round(item.get("similarity", 0), 4)
+                    })
+                    context_chunks.append(chunk_text)
+                    
+                    if item.get("type") == "scheme" and meta.get("scheme_id"):
+                        related_schemes.append(meta["scheme_id"])
+                    elif item.get("type") == "rule" and meta.get("rule_id"):
+                        related_rules.append(meta["rule_id"])
+                        
+                return "\n\n---\n".join(context_chunks), list(set(related_schemes)), list(set(related_rules))
+            else:
+                logger.info("PGVector returned 0 matches, falling back to JSON.")
+    except Exception as e:
+        logger.error(f"Vector search failed: {e}. Falling back to keyword search.")
+
+    # --- FALLBACK: Simple keyword matching ---
+    query_lower = query.lower()
     
     # Search Schemes
     if schemes_data and "schemes" in schemes_data:
@@ -265,7 +321,7 @@ def search_knowledge_base(query: str):
             # Match Name or Description or Category
             text = f"{s.get('name', '')} {s.get('description', '')} {s.get('category', '')}".lower()
             if any(term in text for term in query_lower.split()):
-                context_chunks.append(f"Scheme: {s.get('name')} (ID: {s.get('id')})\nDescription: {s.get('description')}\nEligibility: {json.dumps(s.get('eligibility'))}")
+                context_chunks.append(f"Scheme: {s.get('name')} (ID: {s.get('id')})\\nDescription: {s.get('description')}\\nEligibility: {json.dumps(s.get('eligibility'))}")
                 related_schemes.append(s.get('id'))
                 
     # Search Rules
@@ -273,7 +329,7 @@ def search_knowledge_base(query: str):
         for r in rules_data["rules"]:
             text = f"{r.get('description', '')} {r.get('category', '')}".lower()
             if any(term in text for term in query_lower.split()):
-                context_chunks.append(f"Rule: {r.get('description')} (ID: {r.get('id')})\nRegulatory Source: {r.get('regulatory_source')}")
+                context_chunks.append(f"Rule: {r.get('description')} (ID: {r.get('id')})\\nRegulatory Source: {r.get('regulatory_source')}")
                 related_rules.append(r.get('id'))
                 
     # Limit Context
