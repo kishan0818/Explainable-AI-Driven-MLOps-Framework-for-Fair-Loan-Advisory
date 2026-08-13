@@ -45,7 +45,7 @@ export default function UserDashboard() {
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
 
-        fetch("http://localhost:8000/reference-data").then(r => r.json())
+        fetch(`${process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "http://localhost:8000"}/reference-data`).then(r => r.json())
       ])
 
       if (appRes.error) throw appRes.error

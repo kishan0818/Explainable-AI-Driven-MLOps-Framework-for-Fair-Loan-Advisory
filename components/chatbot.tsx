@@ -111,7 +111,10 @@ export function Chatbot({ className = "" }: ChatbotProps) {
 
     try {
       // Call Real RAG Backend
-      const response = await fetch("http://localhost:8000/chat", {
+      // Use configured API URL (empty string allows relative paths in prod), fallback to localhost for dev
+      const API_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "http://localhost:8000"
+      
+      const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -16,7 +16,8 @@ COPY . .
 
 # Set environment variables for build
 # NEXT_PUBLIC_API_URL can be overridden at runtime or build time
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 # Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED 1
 

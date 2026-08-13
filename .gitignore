@@ -58,6 +58,7 @@ backend_stderr.log
 
 # Environment variables
 .env
+TWXAI_backend/.env
 .env.local
 .env.development.local
 .env.test.local

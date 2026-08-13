@@ -44,7 +44,8 @@ export default function GlobalSchemesPage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await fetch("http://localhost:8000/reference-data")
+                const API_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "http://localhost:8000"
+                const res = await fetch(`${API_URL}/reference-data`)
                 const data = await res.json()
                 setSchemes(data.schemes || [])
 

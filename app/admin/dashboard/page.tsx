@@ -50,7 +50,7 @@ export default function AdminDashboardPage() {
                     "Content-Type": "application/json"
                 }
 
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "http://localhost:8000"
 
                 // 1. Fetch Stats
                 const statsRes = await fetch(`${apiUrl}/admin/stats`, { headers })
