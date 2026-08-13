@@ -2,8 +2,8 @@
 FROM node:18-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* pnpm-lock.yaml* ./
-RUN \
-    if [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
+RUN corepack enable && \
+    if [ -f pnpm-lock.yaml ]; then pnpm i --no-frozen-lockfile; \
     elif [ -f package-lock.json ]; then npm ci; \
     else npm i; \
     fi

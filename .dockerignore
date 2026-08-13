@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+*.csv
+*.joblib
+*.zip
+TWXAI_backend/venv
+TWXAI_backend/__pycache__
+venv
+__pycache__
+*.pyc
+.agents/
