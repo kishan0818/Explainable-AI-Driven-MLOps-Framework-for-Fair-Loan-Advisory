@@ -12,6 +12,7 @@ scipy>=1.7.0
 plotly>=5.0.0
 imbalanced-learn>=0.9.0
 lightgbm
+beautifulsoup4
 
 # Backend & Database
 fastapi>=0.95.0
