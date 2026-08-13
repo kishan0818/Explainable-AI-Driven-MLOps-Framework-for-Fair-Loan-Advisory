@@ -5,8 +5,7 @@ echo ================================================
 echo.
 echo [1/3] Starting Python Backend (FastAPI)...
 cd TWXAI_backend
-call venv\Scripts\activate.bat
-start "Python Backend" cmd /k "python -m uvicorn fastapi_backend:app --reload"
+start "Python Backend" cmd /k "venv\Scripts\python -m uvicorn fastapi_backend:app --reload"
 cd ..
 
 echo.
