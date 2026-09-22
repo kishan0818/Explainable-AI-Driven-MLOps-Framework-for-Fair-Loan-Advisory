@@ -1,0 +1,24 @@
+[
+  {
+    "application_id": "APP-998877",
+    "reviewer_id": "senior_underwriter_7",
+    "override_decision": "APPROVED",
+    "justification": "Co-signer provides additional security collateral above requirement.",
+    "mitigating_factors": [
+      "High income collateral",
+      "Low DTI after co-signer"
+    ],
+    "timestamp": "2026-09-20T19:19:07.578335"
+  },
+  {
+    "application_id": "APP-998877",
+    "reviewer_id": "senior_underwriter_7",
+    "override_decision": "APPROVED",
+    "justification": "Co-signer provides additional security collateral above requirement.",
+    "mitigating_factors": [
+      "High income collateral",
+      "Low DTI after co-signer"
+    ],
+    "timestamp": "2026-09-21T15:04:55.070674"
+  }
+]

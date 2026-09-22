@@ -10,13 +10,24 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Loader2, Shield, Activity, FileText, Server, AlertTriangle, Terminal } from "lucide-react"
+import { Loader2, Shield, Activity, FileText, Server, AlertTriangle, Terminal, Star, CheckCircle, Scale, Clock, Award } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 export default function AdminDashboardPage() {
     const [loading, setLoading] = useState(true)
     const [stats, setStats] = useState<any>(null)
     const [regLogs, setRegLogs] = useState<any[]>([])
     const [mlopsLogs, setMlopsLogs] = useState<any[]>([])
+    const [humanEvalStats, setHumanEvalStats] = useState<any>(null)
+    const [overrideForm, setOverrideForm] = useState({
+        applicationId: "",
+        decision: "APPROVED",
+        justification: "",
+        officerId: "senior_credit_officer"
+    })
+    const [overrideSubmitting, setOverrideSubmitting] = useState(false)
+    const [overrideResult, setOverrideResult] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
 
     const router = useRouter()
@@ -72,6 +83,13 @@ export default function AdminDashboardPage() {
                     setMlopsLogs(data.logs || [])
                 }
 
+                // 4. Fetch Human Evaluation & Governance Stats (PDF Section 8)
+                const humanRes = await fetch(`${apiUrl}/admin/human-eval/stats`, { headers })
+                if (humanRes.ok) {
+                    const hData = await humanRes.json()
+                    setHumanEvalStats(hData)
+                }
+
             } catch (err: any) {
                 console.error("Dashboard Error:", err)
                 setError(err.message)
@@ -82,6 +100,42 @@ export default function AdminDashboardPage() {
 
         fetchData()
     }, [router])
+
+    const handleLoanOverrideSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!overrideForm.applicationId || !overrideForm.justification) return
+        setOverrideSubmitting(true)
+        setOverrideResult(null)
+        try {
+            const adminToken = localStorage.getItem("admin_token")
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json"
+            }
+            if (adminToken) {
+                headers["Authorization"] = `Bearer ${adminToken}`
+            }
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "http://localhost:8000"
+            const res = await fetch(`${apiUrl}/admin/approval/loan-override`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                    application_id: overrideForm.applicationId,
+                    reviewer_id: overrideForm.officerId,
+                    override_decision: overrideForm.decision,
+                    justification: overrideForm.justification,
+                    mitigating_factors: ["Officer Audit Review", "Credit Governance Approved"]
+                })
+            })
+            if (!res.ok) throw new Error("Failed to record override decision")
+            const result = await res.json()
+            setOverrideResult({ success: true, message: `Application ${overrideForm.applicationId} ${overrideForm.decision} successfully.` })
+            setOverrideForm({ applicationId: "", decision: "APPROVED", justification: "", officerId: "senior_credit_officer" })
+        } catch (err: any) {
+            setOverrideResult({ success: false, message: err.message || "Override submission failed" })
+        } finally {
+            setOverrideSubmitting(false)
+        }
+    }
 
     if (loading) {
         return (
@@ -209,13 +263,39 @@ export default function AdminDashboardPage() {
                             <p className="text-xs text-muted-foreground">Avg Latency: {stats?.avg_latency ?? "0.0s"}</p>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardTitle className="text-sm font-medium">Latency Percentiles</CardTitle>
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-xl font-bold">P95: {stats?.p95_latency ?? "0.0s"}</div>
+                            <p className="text-xs text-muted-foreground">P50: {stats?.p50_latency ?? "0.0s"} | P99: {stats?.p99_latency ?? "0.0s"}</p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardTitle className="text-sm font-medium">Agreement & Error Rate</CardTitle>
+                            <Scale className="w-4 h-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-xl font-bold text-blue-500">
+                                {Math.round((humanEvalStats?.inter_annotator_agreement ?? 1.0) * 100)}% Match
+                            </div>
+                            <p className="text-xs text-muted-foreground">Error Rate: {stats?.error_rate_percent ?? 0}%</p>
+                        </CardContent>
+                    </Card>
                 </div>
 
-                {/* Tabs for Logs */}
+                {/* Tabs for Logs & Governance */}
                 <Tabs defaultValue="regulatory" className="space-y-4">
-                    <TabsList>
+                    <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full md:w-auto">
                         <TabsTrigger value="regulatory">Regulatory Audit Logs</TabsTrigger>
                         <TabsTrigger value="mlops">MLOps Lifecycle Logs</TabsTrigger>
+                        <TabsTrigger value="human-eval">Human Evaluation Rubrics</TabsTrigger>
+                        <TabsTrigger value="loan-override">Loan Override (HITL)</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="regulatory" className="space-y-4">
@@ -305,6 +385,105 @@ export default function AdminDashboardPage() {
                                         </TableBody>
                                     </Table>
                                 </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* Human Evaluation & Rubrics Tab (PDF Section 8) */}
+                    <TabsContent value="human-eval" className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <CardTitle>Human Evaluation & Agreement Metrics</CardTitle>
+                                        <CardDescription>Multi-annotator evaluation scores across 7 quality dimensions and inter-annotator consistency.</CardDescription>
+                                    </div>
+                                    <Badge variant="outline" className="text-sm px-3 py-1">
+                                        Overall Score: {humanEvalStats?.overall_quality_score ?? "5.0"} / 5.0
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
+                                    {humanEvalStats?.average_scores && Object.entries(humanEvalStats.average_scores).map(([rubric, score]: any) => (
+                                        <div key={rubric} className="p-4 rounded-lg border bg-card">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-sm font-medium capitalize">{rubric.replace("_", " ")}</span>
+                                                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                                            </div>
+                                            <div className="text-2xl font-bold">{score} <span className="text-xs text-muted-foreground font-normal">/ 5.0</span></div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="p-4 rounded-lg border bg-muted/40 flex flex-col md:flex-row justify-between items-center gap-4">
+                                    <div>
+                                        <h4 className="font-semibold text-sm">Inter-Annotator Agreement Rate</h4>
+                                        <p className="text-xs text-muted-foreground">Proportion of matching judgments across dual human reviewers within +/-1 point.</p>
+                                    </div>
+                                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                        {Math.round((humanEvalStats?.inter_annotator_agreement ?? 1.0) * 100)}%
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* Human Loan Override Tab (PDF Section 1: Human Approval & Section 13) */}
+                    <TabsContent value="loan-override" className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Human-in-the-Loop Loan Override</CardTitle>
+                                <CardDescription>Authorize manual exception or reversal for high-risk or borderline loan applications under RBI fair lending governance.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={handleLoanOverrideSubmit} className="space-y-4 max-w-xl">
+                                    {overrideResult && (
+                                        <Alert variant={overrideResult.success ? "default" : "destructive"}>
+                                            {overrideResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                                            <AlertTitle>{overrideResult.success ? "Success" : "Error"}</AlertTitle>
+                                            <AlertDescription>{overrideResult.message}</AlertDescription>
+                                        </Alert>
+                                    )}
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Application ID</label>
+                                        <Input
+                                            placeholder="e.g. APP-10293"
+                                            value={overrideForm.applicationId}
+                                            onChange={(e) => setOverrideForm({ ...overrideForm, applicationId: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Override Decision</label>
+                                        <select
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                            value={overrideForm.decision}
+                                            onChange={(e) => setOverrideForm({ ...overrideForm, decision: e.target.value })}
+                                        >
+                                            <option value="APPROVED">APPROVE (Override Rejection)</option>
+                                            <option value="REJECTED">REJECT (Override Approval)</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Credit Officer Justification (Mandatory)</label>
+                                        <Textarea
+                                            placeholder="Specify mitigating factors, additional collateral, co-signer evaluation, or regulatory exception reasoning..."
+                                            value={overrideForm.justification}
+                                            onChange={(e) => setOverrideForm({ ...overrideForm, justification: e.target.value })}
+                                            rows={4}
+                                            required
+                                        />
+                                    </div>
+
+                                    <Button type="submit" disabled={overrideSubmitting}>
+                                        {overrideSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                        Submit Official Override Decision
+                                    </Button>
+                                </form>
                             </CardContent>
                         </Card>
                     </TabsContent>

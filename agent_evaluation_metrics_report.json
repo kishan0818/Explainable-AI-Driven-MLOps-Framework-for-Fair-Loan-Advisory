@@ -1,0 +1,30 @@
+{
+  "security": {
+    "pii_recall": 0.7778,
+    "prompt_injection_success_rate": 0.0
+  },
+  "rag": {
+    "precision_at_k": 1.0,
+    "recall_at_k": 1.0
+  },
+  "agent": {
+    "tool_selection_accuracy": 1.0,
+    "step_efficiency": 0.9,
+    "loop_rate": 0.2,
+    "task_success_rate": 1.0
+  },
+  "human_eval": {
+    "total_evaluations": 2,
+    "average_scores": {
+      "correctness": 4.5,
+      "helpfulness": 5.0,
+      "completeness": 4.5,
+      "safety": 5.0,
+      "tone": 5.0,
+      "groundedness": 4.5,
+      "citation_quality": 4.0
+    },
+    "overall_quality_score": 4.64,
+    "inter_annotator_agreement": 1.0
+  }
+}

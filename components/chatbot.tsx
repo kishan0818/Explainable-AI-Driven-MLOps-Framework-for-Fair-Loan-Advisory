@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { MessageCircle, Send, X, Bot, User, ExternalLink } from "lucide-react"
+import { MessageCircle, Send, X, Bot, User, ExternalLink, Star, ThumbsUp, ThumbsDown, Check } from "lucide-react"
 // Local definitions to replace deleted mockdata
 const governmentSchemes = [
   { id: "mudra", name: "MUDRA Loan", description: "Loans for small businesses", url: "https://www.mudra.org.in" },
@@ -81,6 +81,8 @@ export function Chatbot({ className = "" }: ChatbotProps) {
       timestamp: new Date(),
     },
   ])
+  const [sessionId] = useState(() => "session_" + Math.random().toString(36).substring(2, 9))
+  const [ratings, setRatings] = useState<Record<string, number>>({})
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -119,7 +121,7 @@ export function Chatbot({ className = "" }: ChatbotProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ query: inputValue }),
+        body: JSON.stringify({ query: inputValue, session_id: sessionId }),
       })
 
       let botResponse: Message
@@ -150,6 +152,31 @@ export function Chatbot({ className = "" }: ChatbotProps) {
       setMessages((prev) => [...prev, errorResponse])
     } finally {
       setIsTyping(false)
+    }
+  }
+
+  const handleRateMessage = async (messageId: string, rating: number) => {
+    setRatings((prev) => ({ ...prev, [messageId]: rating }))
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "http://localhost:8000"
+      await fetch(`${API_URL}/chat/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          reviewer_id: "web_user",
+          correctness: rating,
+          helpfulness: rating,
+          completeness: rating,
+          safety: 5,
+          tone: 5,
+          groundedness: rating,
+          citation_quality: rating,
+          comments: `User rated response ${rating}/5`
+        })
+      })
+    } catch (e) {
+      console.warn("Feedback submission error:", e)
     }
   }
 
@@ -286,6 +313,34 @@ export function Chatbot({ className = "" }: ChatbotProps) {
                           </div>
                         </div>
                       )}
+                      {/* Human Evaluation Rubric Rating Bar (PDF Section 8) */}
+                      <div className="mt-2 pt-1 flex items-center space-x-2 text-xs text-muted-foreground border-t border-border/40">
+                        <span>Rate accuracy:</span>
+                        <div className="flex items-center space-x-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => handleRateMessage(message.id, star)}
+                              className="p-0.5 hover:scale-125 transition-transform"
+                              title={`Rate ${star}/5`}
+                            >
+                              <Star
+                                className={`w-3.5 h-3.5 ${
+                                  (ratings[message.id] ?? 0) >= star
+                                    ? "text-amber-500 fill-amber-500"
+                                    : "text-muted-foreground/40 hover:text-amber-400"
+                                }`}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                        {ratings[message.id] && (
+                          <span className="text-[11px] text-green-600 dark:text-green-400 font-medium flex items-center">
+                            <Check className="w-3 h-3 mr-0.5" /> Saved
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
