@@ -1,0 +1,54 @@
+[
+  {
+    "session_id": "session_eval_demo_1",
+    "reviewer_id": "reviewer_alpha",
+    "correctness": 5,
+    "helpfulness": 5,
+    "completeness": 4,
+    "safety": 5,
+    "tone": 5,
+    "groundedness": 5,
+    "citation_quality": 4,
+    "comments": "Clear and verified against RBI guidelines.",
+    "created_at": "2026-09-20T19:17:20.267031"
+  },
+  {
+    "session_id": "session_eval_demo_1",
+    "reviewer_id": "reviewer_beta",
+    "correctness": 4,
+    "helpfulness": 5,
+    "completeness": 5,
+    "safety": 5,
+    "tone": 5,
+    "groundedness": 4,
+    "citation_quality": 4,
+    "comments": "High accuracy, matched citations.",
+    "created_at": "2026-09-20T19:17:20.269844"
+  },
+  {
+    "session_id": "test_verification_session",
+    "reviewer_id": "auditor_1",
+    "correctness": 5,
+    "helpfulness": 5,
+    "completeness": 5,
+    "safety": 5,
+    "tone": 5,
+    "groundedness": 5,
+    "citation_quality": 5,
+    "comments": "Automated verification test feedback",
+    "created_at": "2026-09-20T19:19:07.538505"
+  },
+  {
+    "session_id": "test_verification_session",
+    "reviewer_id": "auditor_1",
+    "correctness": 5,
+    "helpfulness": 5,
+    "completeness": 5,
+    "safety": 5,
+    "tone": 5,
+    "groundedness": 5,
+    "citation_quality": 5,
+    "comments": "Automated verification test feedback",
+    "created_at": "2026-09-21T15:04:55.024852"
+  }
+]

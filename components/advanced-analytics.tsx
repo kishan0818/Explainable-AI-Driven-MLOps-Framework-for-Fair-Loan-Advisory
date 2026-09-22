@@ -359,7 +359,7 @@ export function AdvancedAnalytics({ userRole }: AnalyticsProps) {
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="count"
-                      label={({ name, percentage }) => `${name}: ${percentage}%`}
+                      label={({ name, percentage }: any) => `${name}: ${percentage}%`}
                     >
                       {riskDistributionData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />

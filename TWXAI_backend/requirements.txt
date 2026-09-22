@@ -29,3 +29,6 @@ langchain-openai
 langgraph
 sentence-transformers
 langchain-huggingface
+httpx
+langfuse
+pytest

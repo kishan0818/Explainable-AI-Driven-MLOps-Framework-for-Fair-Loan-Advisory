@@ -39,6 +39,8 @@ from regulatory_monitor import RegulatoryMonitor
 import agent_core
 from security_filters import SecurityShield
 from observability_config import get_telemetry_handler
+from reranker import EvidenceReranker
+from human_eval import HumanEvalManager, HumanEvaluationSubmission, LoanOverrideRequest
 
 # Load environment variables
 load_dotenv()
@@ -319,7 +321,9 @@ def search_knowledge_base(query: str):
                     elif item.get("type") == "rule" and meta.get("rule_id"):
                         related_rules.append(meta["rule_id"])
                         
-                return "\n\n---\n".join(context_chunks), list(set(related_schemes)), list(set(related_rules))
+                # Re-rank retrieved semantic chunks (PDF Section 4: Re-ranking)
+                reranked_chunks = EvidenceReranker.rerank(query, context_chunks, top_k=4)
+                return "\n\n---\n".join(reranked_chunks), list(set(related_schemes)), list(set(related_rules))
             else:
                 logger.info("PGVector returned 0 matches, falling back to JSON.")
     except Exception as e:
@@ -345,8 +349,9 @@ def search_knowledge_base(query: str):
                 context_chunks.append(f"Rule: {r.get('description')} (ID: {r.get('id')})\\nRegulatory Source: {r.get('regulatory_source')}")
                 related_rules.append(r.get('id'))
                 
-    # Limit Context
-    return "\n\n".join(context_chunks[:5]), list(set(related_schemes[:3])), list(set(related_rules[:3]))
+    # Re-rank and Limit Context (PDF Section 4: Re-ranking)
+    reranked_chunks = EvidenceReranker.rerank(query, context_chunks, top_k=4)
+    return "\n\n".join(reranked_chunks), list(set(related_schemes[:3])), list(set(related_rules[:3]))
 
 # --- Rate Limiter ---
 import time
@@ -397,7 +402,7 @@ async def call_llm_api(query: str, context: str):
     ]
     
     payload = {
-        "model": "openai/gpt-oss-20b",
+        "model": "meta/llama-3.2-11b-vision-instruct",
         "messages": messages,
         "temperature": 1.0,
         "top_p": 1,
@@ -528,7 +533,7 @@ async def chat_endpoint(req: ChatRequest):
             if supabase:
                 supabase.table("mlops_logs").insert({
                     "event_type": "system_info",
-                    "model_version": "meta/llama-3.1-70b-instruct",
+                    "model_version": "meta/llama-3.2-11b-vision-instruct",
                     "details": {
                         "alert_type": "security_alert",
                         "sub_type": "prompt_injection",
@@ -552,7 +557,7 @@ async def chat_endpoint(req: ChatRequest):
             if supabase:
                 supabase.table("mlops_logs").insert({
                     "event_type": "system_info",
-                    "model_version": "meta/llama-3.1-70b-instruct",
+                    "model_version": "meta/llama-3.2-11b-vision-instruct",
                     "details": {
                         "alert_type": "security_alert",
                         "sub_type": "pii_masked",
@@ -600,7 +605,7 @@ async def chat_endpoint(req: ChatRequest):
             if supabase:
                 supabase.table("mlops_logs").insert({
                     "event_type": "prediction",
-                    "model_version": "meta/llama-3.1-70b-instruct",
+                    "model_version": "meta/llama-3.2-11b-vision-instruct",
                     "details": {
                         "latency_seconds": round(latency, 4),
                         "query_length": len(req.query),
@@ -1601,9 +1606,13 @@ def get_admin_stats(user: dict = Depends(verify_token), secret: str = Header(Non
                 fairness_alerts = sum(1 for log in logs if log.get("event_type") == "fairness_alert")
                 security_alerts = sum(1 for log in logs if log.get("event_type") == "security_alert" or (log.get("event_type") == "system_info" and (log.get("details") or {}).get("alert_type") == "security_alert"))
                 
-                # Telemetry
+                # Telemetry & Latency Percentiles (PDF Section 10: Observability Metrics)
                 llm_logs = [log for log in logs if log.get("event_type") == "prediction" and "llama" in str(log.get("model_version")).lower()]
                 llm_requests = len(llm_logs)
+                p50_latency = "0.0s"
+                p95_latency = "0.0s"
+                p99_latency = "0.0s"
+                
                 if llm_requests > 0:
                     latencies = []
                     for log in llm_logs:
@@ -1614,8 +1623,17 @@ def get_admin_stats(user: dict = Depends(verify_token), secret: str = Header(Non
                             except: pass
                     if latencies:
                         avg_latency = f"{round(sum(latencies) / len(latencies), 2)}s"
+                        p50_latency = f"{round(float(np.percentile(latencies, 50)), 2)}s"
+                        p95_latency = f"{round(float(np.percentile(latencies, 95)), 2)}s"
+                        p99_latency = f"{round(float(np.percentile(latencies, 99)), 2)}s"
+                        
+                # Error Rate calculation: Failed Requests / Total Requests (PDF Section 10 & 11)
+                total_events = len(logs)
+                failed_events = sum(1 for log in logs if log.get("severity") in ["critical", "error"])
+                error_rate = round((failed_events / max(total_events, 1)) * 100, 2)
     except Exception as e:
         logger.error(f"Failed to query stats from Supabase: {e}")
+        p50_latency, p95_latency, p99_latency, error_rate = "0.0s", "0.0s", "0.0s", 0.0
     
     return {
         "active_model": active_model,
@@ -1625,8 +1643,39 @@ def get_admin_stats(user: dict = Depends(verify_token), secret: str = Header(Non
         "security_alerts": security_alerts,
         "llm_requests": llm_requests,
         "avg_latency": avg_latency,
+        "p50_latency": p50_latency,
+        "p95_latency": p95_latency,
+        "p99_latency": p99_latency,
+        "error_rate_percent": error_rate,
         "last_updated": datetime.now().isoformat()
     }
+
+# --- Human Evaluation & Approval Endpoints (PDF Sections 7, 8, 13) ---
+
+@app.post("/chat/feedback", tags=["Human Evaluation"])
+def submit_chat_feedback(feedback: HumanEvaluationSubmission):
+    """
+    Submits human evaluation rubric ratings (1-5 scale) across Correctness,
+    Helpfulness, Completeness, Safety, Tone, Groundedness, and Citation Quality.
+    """
+    res = HumanEvalManager.save_evaluation(feedback)
+    return {"status": "Feedback recorded", "result": res}
+
+@app.get("/admin/human-eval/stats", tags=["Admin"])
+def get_human_evaluation_stats(secret: str = Header(None, alias="X-Admin-Secret")):
+    """
+    Returns aggregated human evaluation metrics, Likert averages, and Inter-Annotator Agreement.
+    """
+    return HumanEvalManager.get_summary_metrics()
+
+@app.post("/admin/approval/loan-override", tags=["Admin"])
+def request_loan_override(override: LoanOverrideRequest, secret: str = Header(None, alias="X-Admin-Secret")):
+    """
+    Human-in-the-loop approval gate: enables an authorized credit officer
+    to review and override a high-risk or rejected loan decision with audit justification.
+    """
+    res = HumanEvalManager.record_loan_override(override)
+    return {"status": "Override decision processed", "details": res}
 
 @app.get("/admin/logs/regulatory", tags=["Admin"])
 def get_regulatory_logs(user: dict = Depends(verify_token)):
