@@ -1,42 +1,42 @@
-# 🏛️ Explainable-AI-Driven MLOps Framework for Fair Loan Advisory (TWXAI)
+# Explainable-AI-Driven MLOps Framework for Fair Loan Advisory (TWXAI)
 
-[![CI/CD Pipeline](https://github.com/kishan0818/Explainable-AI-Driven-MLOps-Framework-for-Fair-Loan-Advisory/actions/workflows/ci.yml/badge.svg)](https://github.com/kishan0818/Explainable-AI-Driven-MLOps-Framework-for-Fair-Loan-Advisory/actions/workflows/ci.yml)
+[![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-Passing-22C55E?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![Python Version](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?logo=next.js&logoColor=white)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![MLOps](https://img.shields.io/badge/MLOps-MLflow%20%7C%20Evidently%20AI-0194E2)](https://mlflow.org)
 [![LLMOps](https://img.shields.io/badge/LLMOps-Langfuse%20%7C%20LangGraph-FF6F00)](https://langfuse.com)
-[![Audit Readiness](https://img.shields.io/badge/Audit%20Readiness-98.1%25%20Verified-22C55E)](#-production-audit--benchmarks)
+[![Audit Readiness](https://img.shields.io/badge/Audit%20Readiness-98.1%25%20Verified-22C55E)](#production-audit--benchmarks)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > **An enterprise-grade, regulatory-compliant credit risk underwriting and advisory platform combining Dual-Model Machine Learning (Random Forest + SMOTE, XGBoost), Explainable AI (SHAP & Counterfactuals), Multi-Agent RAG (LangGraph + Qdrant + FlashRank), and Full-Lifecycle MLOps/LLMOps governance.**
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 
-1. [Executive Overview](#-executive-overview)
-2. [Key System Highlights](#-key-system-highlights)
-3. [System Architecture & Workflow DAG](#-system-architecture--workflow-dag)
-4. [Technology Stack](#-technology-stack)
-5. [Repository Structure](#-repository-structure)
-6. [Production Audit & Benchmarks](#-production-audit--benchmarks)
-7. [Getting Started & Local Setup](#-getting-started--local-setup)
+1. [Executive Overview](#executive-overview)
+2. [Key System Highlights](#key-system-highlights)
+3. [System Architecture & Workflow DAG](#system-architecture--workflow-dag)
+4. [Technology Stack](#technology-stack)
+5. [Repository Structure](#repository-structure)
+6. [Production Audit & Benchmarks](#production-audit--benchmarks)
+7. [Getting Started & Local Setup](#getting-started--local-setup)
    - [Prerequisites](#prerequisites)
    - [Environment Configuration](#environment-configuration)
    - [Quick Start: Automated Scripts](#quick-start-automated-scripts)
    - [Manual Step-by-Step Setup](#manual-step-by-step-setup)
    - [Docker & Containerized Deployment](#docker--containerized-deployment)
-8. [API Documentation & Endpoints](#-api-documentation--endpoints)
-9. [Verification & Automated Testing Suite](#-verification--automated-testing-suite)
-10. [Human-in-the-Loop & Underwriting Governance](#-human-in-the-loop--underwriting-governance)
-11. [Audit Deliverables & Documentation](#-audit-deliverables--documentation)
-12. [Contributing & License](#-contributing--license)
+8. [API Documentation & Endpoints](#api-documentation--endpoints)
+9. [Verification & Automated Testing Suite](#verification--automated-testing-suite)
+10. [Human-in-the-Loop & Underwriting Governance](#human-in-the-loop--underwriting-governance)
+11. [Audit Deliverables & Documentation](#audit-deliverables--documentation)
+12. [Contributing & License](#contributing--license)
 
 ---
 
-## 📋 Executive Overview
+## Executive Overview
 
 Traditional automated credit risk evaluation systems operate as opaque "black boxes," frequently perpetuating historical lending disparities, denying creditworthy marginalized applicants (e.g., female entrepreneurs, rural micro-enterprises, SC/ST borrowers), and offering zero transparency into adverse decisions.
 
@@ -48,7 +48,7 @@ The **Explainable-AI-Driven MLOps Framework for Fair Loan Advisory (TWXAI)** sol
 
 ---
 
-## 🌟 Key System Highlights
+## Key System Highlights
 
 ### 1. Dual-Model Credit Risk Engine
 * **Primary Champion Model:** Random Forest Classifier trained on balanced credit histories with **SMOTE** (Synthetic Minority Over-sampling Technique) and controlled PCA preprocessing to resolve acute class imbalance without losing minority feature variance.
@@ -74,7 +74,7 @@ The **Explainable-AI-Driven MLOps Framework for Fair Loan Advisory (TWXAI)** sol
 
 ---
 
-## 🏗️ System Architecture & Workflow DAG
+## System Architecture & Workflow DAG
 
 ### High-Level Topology
 
@@ -121,7 +121,7 @@ flowchart TD
 
 ---
 
-## 💻 Technology Stack
+## Technology Stack
 
 | Layer | Technologies & Frameworks | Purpose |
 | :--- | :--- | :--- |
@@ -137,7 +137,7 @@ flowchart TD
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 Explainable-AI-Driven-MLOps-Framework-for-Fair-Loan-Advisory/
@@ -188,7 +188,7 @@ Explainable-AI-Driven-MLOps-Framework-for-Fair-Loan-Advisory/
 
 ---
 
-## 📊 Production Audit & Benchmarks
+## Production Audit & Benchmarks
 
 The framework has been audited against the **Module 10 Enterprise AI Checklist** across **14 evaluation categories**, achieving an overall implementation readiness score of **98.1%**:
 
@@ -232,7 +232,7 @@ Net Performance Gain           :  +22.7% Precision    |  +28.4% MRR
 
 ---
 
-## 🚀 Getting Started & Local Setup
+## Getting Started & Local Setup
 
 ### Prerequisites
 
@@ -245,45 +245,14 @@ Net Performance Gain           :  +22.7% Precision    |  +28.4% MRR
 
 ### Environment Configuration
 
-The repository uses separate environment configuration files for Frontend and Backend.
+Please refer to the [`.env.example`](.env.example) file for detailed instructions on configuring the environment variables for both the Backend (`TWXAI_backend/.env`) and Frontend (`.env.local`).
 
-#### 1. Backend Configuration (`TWXAI_backend/.env`)
+```bash
+# Copy template for Backend
+cp .env.example TWXAI_backend/.env
 
-Create `TWXAI_backend/.env` (or copy from `.env.example`):
-
-```ini
-# Supabase Database Credentials
-SUPABASE_URL="https://your-project.supabase.co"
-SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-SUPABASE_ANON_KEY="your-anon-key"
-SUPABASE_JWT_SECRET="your-jwt-secret"
-
-# LLM & Search Providers
-PERPLEXITY_API_KEY="your-perplexity-api-key"
-NVIDIA_API_KEY="your-nvidia-api-key"
-SERPAPI_API_KEY="your-serpapi-key"
-
-# Security & Admin Access
-ADMIN_SECRET="twxai_admin"
-ADMIN_EMAIL="admin@twxai.com"
-ADMIN_PASSWORD="secure_admin_password"
-RECAPTCHA_SECRET_KEY="your-recaptcha-secret"
-
-# Langfuse Observability
-LANGFUSE_SECRET_KEY="sk-lf-..."
-LANGFUSE_PUBLIC_KEY="pk-lf-..."
-LANGFUSE_HOST="https://cloud.langfuse.com"
-```
-
-#### 2. Frontend Configuration (`.env.local`)
-
-Create `.env.local` in the project root:
-
-```ini
-NEXT_PUBLIC_API_URL="http://localhost:8000"
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
-NEXT_PUBLIC_RECAPTCHA_SITE_KEY="your-recaptcha-site-key"
+# Copy template for Frontend
+cp .env.example .env.local
 ```
 
 ---
@@ -368,7 +337,7 @@ docker-compose up -d
 
 ---
 
-## 📡 API Documentation & Endpoints
+## API Documentation & Endpoints
 
 FastAPI provides an interactive OpenAPI / Swagger UI at `http://localhost:8000/docs`. Key production endpoints include:
 
@@ -401,7 +370,7 @@ FastAPI provides an interactive OpenAPI / Swagger UI at `http://localhost:8000/d
 
 ---
 
-## 🧪 Verification & Automated Testing Suite
+## Verification & Automated Testing Suite
 
 The framework includes a multi-tier test suite covering unit tests, agent benchmark evaluation, and end-to-end integration tests.
 
@@ -424,7 +393,7 @@ pnpm run build
 
 ---
 
-## 👥 Human-in-the-Loop & Underwriting Governance
+## Human-in-the-Loop & Underwriting Governance
 
 In compliance with international and RBI fair lending standards, the platform guarantees that automated algorithms never make irreversible adverse credit decisions without human oversight:
 
@@ -455,7 +424,7 @@ Every underwriter action records:
 
 ---
 
-## 📑 Audit Deliverables & Documentation
+## Audit Deliverables & Documentation
 
 This repository contains full, standalone audit documentation prepared in accordance with the Module 10 Enterprise AI evaluation standards:
 
@@ -466,7 +435,7 @@ This repository contains full, standalone audit documentation prepared in accord
 
 ---
 
-## 🤝 Contributing & License
+## Contributing & License
 
 ### Contributing
 
